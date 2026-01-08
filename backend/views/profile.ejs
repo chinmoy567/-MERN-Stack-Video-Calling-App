@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Profile</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .profile-section {
+            margin: 20px 0;
+        }
+        .profile-image {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .profile-image img {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid #007bff;
+        }
+        .info-row {
+            margin: 15px 0;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+        .info-label {
+            font-weight: bold;
+            color: #666;
+        }
+        .info-value {
+            color: #333;
+            margin-top: 5px;
+        }
+        .actions {
+            text-align: center;
+            margin-top: 30px;
+        }
+        .btn {
+            padding: 12px 24px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-primary {
+            background-color: #007bff;
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #0056b3;
+        }
+        .btn-danger {
+            background-color: #dc3545;
+            color: white;
+        }
+        .btn-danger:hover {
+            background-color: #c82333;
+        }
+        .error {
+            color: red;
+            margin: 10px 0;
+        }
+        .success {
+            color: green;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>User Profile</h1>
+        
+        <% if(typeof error !== 'undefined'){ %>
+            <div class="error"><%= error %></div>
+        <% } %>
+        <% if(typeof success !== 'undefined'){ %>
+            <div class="success"><%= success %></div>
+        <% } %>
+        
+        <% if(typeof user !== 'undefined'){ %>
+            <div class="profile-section">
+                <div class="profile-image">
+                    <img src="/<%= user.image %>" alt="Profile Picture" />
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Name</div>
+                    <div class="info-value"><%= user.name %></div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Email</div>
+                    <div class="info-value"><%= user.email %></div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Mobile</div>
+                    <div class="info-value"><%= user.mobile %></div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Email Verified</div>
+                    <div class="info-value"><%= user.is_verified == 1 ? 'Yes' : 'No' %></div>
+                </div>
+            </div>
+        <% } %>
+        
+        <div class="actions">
+            <a href="/update-profile" class="btn btn-primary">Update Profile</a>
+            <a href="/api/logout" class="btn btn-danger">Logout</a>
+        </div>
+    </div>
+</body>
+</html>
+
+

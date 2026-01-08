@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registration Successful</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 500px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        h1 {
+            color: #28a745;
+        }
+        .success-message {
+            color: #28a745;
+            font-size: 18px;
+            margin: 20px 0;
+        }
+        .info {
+            color: #666;
+            margin: 20px 0;
+        }
+        a {
+            color: #007bff;
+            text-decoration: none;
+            display: inline-block;
+            margin-top: 20px;
+            padding: 10px 20px;
+            border: 1px solid #007bff;
+            border-radius: 4px;
+        }
+        a:hover {
+            background-color: #007bff;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>✓ Registration Successful!</h1>
+        <div class="success-message"><%= message %></div>
+        <div class="info">
+            <p>A verification email has been sent to <strong><%= email %></strong></p>
+            <p>Please check your email and verify your account to login.</p>
+        </div>
+        <a href="/send-mail-verification">Resend Verification Email</a>
+        <br>
+        <a href="/login">Go to Login</a>
+    </div>
+</body>
+</html>
+
+
