@@ -5,6 +5,7 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const path = require("path");
 
+
 // External modules
 const userRoute = require("./routes/userRoute");
 const authRoute = require("./routes/authRoute");

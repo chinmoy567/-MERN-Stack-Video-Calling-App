@@ -73,7 +73,7 @@ class AuthService {
       formData,
       this.configMultipartData
     );
-  }z
+  }
 
   // Login method
   login(formData) {
