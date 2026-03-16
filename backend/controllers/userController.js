@@ -13,15 +13,12 @@ const User = require("../models/userModel");
 const PasswordReset = require("../models/passwordResetModel");
 const Blacklist = require("../models/blacklistModel");
 const Otp = require("../models/otpModel");
-
-
 const { deleteFile } = require("../helpers/deletFile");
 const mailer = require("../helpers/mailer");
 const { oneMinuteExpiry,threeMinuteExpiry } = require("../helpers/otpValidate");
 
 
 //necessary functions
-
 // 1. Generate JWT access Token
 const generateAccessToken = async (user) => {
   const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
@@ -43,10 +40,8 @@ const generateRandom4Digit = async () => {
 
 
 
-
 // User Registration Controller
 const userRegister = async (req, res) => {
-
   try {
     const errors = validationResult(req);
     // res.setHeader("Content-Type", "application/json");
@@ -83,7 +78,6 @@ const userRegister = async (req, res) => {
   <p>Please <a href="http://localhost:4000/mail-verification?id=${userData._id}">verify your email</a></p>
 `;
 
-
 mailer.sendMail(email, "Mail Verification", msg);
 
     return res.status(200).json({
@@ -92,8 +86,6 @@ mailer.sendMail(email, "Mail Verification", msg);
       user: userData,
     });
   }
-
-
    catch (error) {
     return res.status(400).json({
       success: false,

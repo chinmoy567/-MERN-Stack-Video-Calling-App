@@ -19,13 +19,13 @@ const Layout = ({ children }) => {
           >
             ☰
           </button>
-          <h2 className="text-xl font-semibold">Sidebar #04</h2>
+        
         </header>
 
         {/* Page Content */}
         <main
           className={`p-6 transition-all duration-300 ${
-            isSidebarOpen ? "ml-0" : "ml-0"
+            isSidebarOpen ? "ml-64" : "ml-0"
           }`}
         >
           {children}

@@ -20,6 +20,7 @@ const ProtectedRoute = ({ element }) => {
   return isAuthenticated ? element : <Navigate to="/login" />;
 };
 
+
 function App() {
   return (
     <Router>

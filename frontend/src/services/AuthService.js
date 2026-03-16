@@ -1,14 +1,13 @@
 import axios from "axios";
 
 class AuthService {
+  
   url = import.meta.env.VITE_API_URL;
-
   configMultipartData = {
     headers: {
       "Content-Type": "multipart/form-data",
     },
   };
-
   configJsonData = {
     headers: {
       "Content-Type": "application/json",
@@ -31,7 +30,7 @@ class AuthService {
             await this.refreshToken();
             const newAccessToken = localStorage.getItem("accessToken");
             originalRequest.headers["Authorization"] =
-              "Bearer " + newAccessToken;
+            "Bearer " + newAccessToken;
             return this.axiosInstance(originalRequest);
 
           } catch (e) {
@@ -41,14 +40,13 @@ class AuthService {
             return Promise.reject(e);
           }
         }
-      }
+      } 
     );
   }
 
   // Refresh token method
   async refreshToken() {
     const storedRefreshToken = localStorage.getItem("refreshToken");
-
     const authorizationHeader = {
       headers: {
         Authorization: "Bearer " + storedRefreshToken,

@@ -66,7 +66,7 @@ userRoute.post("/login", loginValidator, userController.loginUser);
 userRoute.get("/profile", auth, userController.userProfile);
 userRoute.post("/update-profile", auth,upload.single("image"), updateProfileValidator, userController.updateProfile);
 userRoute.get("/refresh-token", auth, userController.refreshToken);
-userRoute.get("/logout", auth, userController.logout);
+userRoute.post("/logout", auth, userController.logout);
 
 //otp verification routes
 userRoute.post("/send-otp", otpMailValidator, userController.sendOtp);
@@ -74,4 +74,3 @@ userRoute.post("/verify-otp", verifyOtpValidator, userController.verifyOtp);
 
 
 module.exports = userRoute;
-  
