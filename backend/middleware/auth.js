@@ -33,7 +33,6 @@ const verifyToken = async (req, res, next) => {
           msg: "This session has expired, please try again!",
         });
       }
-
       const decodedData = jwt.verify(bearerToken, config.ACCESS_TOKEN_SECRET);
       req.user = decodedData;
     } 

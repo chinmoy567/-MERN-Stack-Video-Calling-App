@@ -16,6 +16,7 @@ const {
   updateProfileValidator,
   otpMailValidator,
   verifyOtpValidator,
+  
 } = require("../helpers/validation");
 
 const auth = require("../middleware/auth");
@@ -71,6 +72,8 @@ userRoute.post("/logout", auth, userController.logout);
 //otp verification routes
 userRoute.post("/send-otp", otpMailValidator, userController.sendOtp);
 userRoute.post("/verify-otp", verifyOtpValidator, userController.verifyOtp);
-
+userRoute.get ('/all-users',auth, userController.getAllUsers);
 
 module.exports = userRoute;
+
+

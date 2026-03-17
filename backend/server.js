@@ -34,6 +34,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/images", express.static(path.join(__dirname, "public/images")));
 
 
+
 // MongoDB Connection
 mongoose
   .connect(process.env.MONGO_URI)
@@ -44,9 +45,9 @@ mongoose
 // Middlewares
 app.use("/api", userRoute);
 app.use("/", authRoute);
-
-
 let server;
+
+
 
 // Start the server
 server=app.listen(port, () => {

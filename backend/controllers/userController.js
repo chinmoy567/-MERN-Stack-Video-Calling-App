@@ -581,6 +581,28 @@ const verifyOtp = async (req, res) => {
 };
 
 
+const getAllUsers = async (req, res) => {
+  try {
+
+    const userId = req.user.user._id;
+
+    const users = await User.find({
+      _id: { $ne: userId }
+    });
+
+    return res.status(200).json({
+      success: true,
+      msg: 'All users!',
+      data: users
+    });
+
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      msg: error.message
+    });
+  }
+};
 
 module.exports = {
   userRegister,
@@ -597,5 +619,6 @@ module.exports = {
   logout,
   sendOtp,
   verifyOtp,
+  getAllUsers
 };
    

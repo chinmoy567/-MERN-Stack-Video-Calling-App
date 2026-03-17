@@ -3,14 +3,15 @@ import socketInstance from "../../socket";
 
 const Dashboard = () => {
   const socket = socketInstance.getSocket();
-console.log(socket);
+  console.log(socket);
   return (
     <Layout>
-      <p className="text-gray-700">
-        Lorem ipsum dolor sit amet, consectetur adipisicing elit.
-      </p>
+      <h2 className="text-xl text-gray-700 bg-white p-4 rounded shadow">
+        Welcome to Dashboard
+      </h2>
     </Layout>
   );
 };
 
 export default Dashboard;
+
