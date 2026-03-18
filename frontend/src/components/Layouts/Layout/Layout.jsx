@@ -9,9 +9,10 @@ const Layout = ({ children }) => {
       {/* Sidebar */}
       <Sidebar isOpen={isSidebarOpen} />
 
-      {/* Header */}
+      {/* Header  */}
+
       <header
-        className={`fixed top-0 h-16 bg-white shadow z-50 flex items-center px-6 transition-all duration-300
+        className={`fixed top-0 h-16 bg-blue-600 shadow z-50 flex items-center px-6 transition-all duration-300
         ${isSidebarOpen ? "left-64 w-[calc(100%-16rem)]" : "left-0 w-full"}`}
       >
         <button
@@ -20,8 +21,6 @@ const Layout = ({ children }) => {
         >
           ☰
         </button>
-
-        <h1 className="ml-4 font-semibold">Dashboard</h1>
       </header>
 
       {/* Content */}

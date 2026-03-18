@@ -9,7 +9,7 @@ const Sidebar = ({ isOpen }) => {
   useEffect(() => {
     const user = AuthService.getUserData();
     setCurrentUserName(user?.name || "");
-  }, []);
+    }, []);
 
   const handleLogout = () => {
   AuthService.logoutUser();
@@ -18,29 +18,20 @@ const Sidebar = ({ isOpen }) => {
 
   return (
       <div
-    className={`fixed top-16 left-0 w-64 h-[calc(100vh-4rem)] bg-gray-900 text-white 
-    transform transition-transform duration-300 z-40
-    ${isOpen ? "translate-x-0" : "-translate-x-full"}`}
-  >
+      className={`fixed top-0 left-0 w-64 h-screen bg-gray-900 text-white 
+      transform transition-transform duration-300 z-40
+      ${isOpen ? "translate-x-0" : "-translate-x-full"}`}>
+
       {/* Header */}
-      <div className="bg-blue-600 px-4 py-4 font-semibold text-lg">
+      <div className="bg-blue-200 px-4 py-4 font-semibold text-lg">
         Project Name
       </div>
-      <div className='text-center'>
+      <div className='bg-blue-200 px-4 py-4 font-semibold text-lg'>
         <button className='btn btn-secondary' onClick={handleLogout}>
           Log Out
         </button>
       </div>
       
-
-      
-      {/* <ul className="mt-4">
-        <li className="bg-gray-800 hover:bg-gray-700 transition">
-          <Link to="/dashboard" className="block px-4 py-3">
-            Dashboard
-          </Link>
-        </li>
-      </ul> */}
       {/* User */}
       <div className="px-4 py-2 text-sm text-gray-300">
         Hi, {currentUserName}
