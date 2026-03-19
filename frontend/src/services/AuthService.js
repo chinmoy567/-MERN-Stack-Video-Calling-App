@@ -132,6 +132,15 @@ class AuthService {
   setUserData(userData) {
     localStorage.setItem("user", JSON.stringify(userData));
   }
+
+getAllUsers() {
+  const authorizationHeader = {
+    headers: {
+      'Authorization': 'Bearer ' + localStorage.getItem('accessToken')
+    }
+  };
+  return this.axiosInstance.get(this.url + 'all-users', authorizationHeader);
 }
 
+}
 export default new AuthService();
