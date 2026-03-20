@@ -12,6 +12,8 @@ const getSocket = () => {
 const setSocket = () => {
   socket = null;
 } 
+
+
 export default {
   getSocket,
   setSocket

@@ -1,15 +1,14 @@
 import { useState } from "react";
 import Sidebar from "../Sidebar/Sidebar";
 
-const Layout = ({ children }) => {
+const Layout = ({ children, onlineUsers }) => {  // ← onlineUsers here
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+  console.log("Layout received onlineUsers:", onlineUsers); // debug
 
   return (
     <div>
-      {/* Sidebar */}
-      <Sidebar isOpen={isSidebarOpen} />
-
-      {/* Header  */}
+      <Sidebar onlineUsers={onlineUsers} isOpen={isSidebarOpen} /> {/* ← and here */}
 
       <header
         className={`fixed top-0 h-16 bg-blue-600 shadow z-50 flex items-center px-6 transition-all duration-300
@@ -23,7 +22,6 @@ const Layout = ({ children }) => {
         </button>
       </header>
 
-      {/* Content */}
       <main
         className={`mt-16 p-6 transition-all duration-300 ${
           isSidebarOpen ? "ml-64" : "ml-0"
@@ -49,41 +47,49 @@ export default Layout;
 
 
 
+
+
+
+
+
+
+
 // import { useState } from "react";
 // import Sidebar from "../Sidebar/Sidebar";
 
-// const Layout = ({ children }) => {
+// const Layout = ({ children, onlineUsers }) => {
 //   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
 //   return (
-//     <div className="flex min-h-screen bg-gray-100">
+//     <div>
 //       {/* Sidebar */}
-//       <Sidebar isOpen={isSidebarOpen} />
+//       <Sidebar onlineUsers={onlineUsers} isOpen={isSidebarOpen} />
 
-//       {/* Content Area */}
-//       <div className="flex-1">
-//         {/* Top Bar */}
-//         <header className="flex items-center gap-4 px-6 py-4 bg-white shadow">
-//           <button
-//             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-//             className="text-2xl"
-//           >
-//             ☰
-//           </button>
-        
-//         </header>
+//       {/* Header  */}
 
-//         {/* Page Content */}
-//         <main
-//           className={`p-6 transition-all duration-300 ${
-//             isSidebarOpen ? "ml-64" : "ml-0"
-//           }`}
+//       <header
+//         className={`fixed top-0 h-16 bg-blue-600 shadow z-50 flex items-center px-6 transition-all duration-300
+//         ${isSidebarOpen ? "left-64 w-[calc(100%-16rem)]" : "left-0 w-full"}`}
+//       >
+//         <button
+//           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+//           className="text-2xl"
 //         >
-//           {children}
-//         </main>
-//       </div>
+//           ☰
+//         </button>
+//       </header>
+
+//       {/* Content */}
+//       <main
+//         className={`mt-16 p-6 transition-all duration-300 ${
+//           isSidebarOpen ? "ml-64" : "ml-0"
+//         }`}
+//       >
+//         {children}
+//       </main>
 //     </div>
 //   );
 // };
 
 // export default Layout;
+
