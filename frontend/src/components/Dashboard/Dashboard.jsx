@@ -1,34 +1,27 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Navigate } from "react-router-dom";
 import Layout from "../Layouts/Layout/Layout";
 import socketInstance from "../../socket";
-import AuthService from "../../services/AuthService";
+import AuthService, { ACCESS_TOKEN_UPDATED } from "../../services/AuthService";
 import Peer from "simple-peer";
 import Calling from "../Calling/Calling";
 import { MdCallEnd } from "react-icons/md";
 
+const ICE_SERVERS = {
+  iceServers: [
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun1.l.google.com:19302" },
+  ],
+};
+
 /**
- * No short timers on first calls — Chrome’s permission dialog keeps getUserMedia pending.
- *
- * Many Windows + Logitech setups fail { video: true, audio: true } (AbortError / NotReadableError)
- * but succeed when microphone and camera are requested separately and merged.
+ * Prefer microphone first, then add camera — avoids Chrome on Windows aborting with
+ * "AbortError: Timeout starting video source" on the common first call { video:true, audio:true }.
  */
 async function acquireLocalMedia() {
   const md = navigator.mediaDevices;
   if (!md?.getUserMedia) {
     throw new DOMException("Use HTTPS or localhost for camera/microphone.", "NotSupportedError");
-  }
-
-  try {
-    return await md.getUserMedia({ video: true, audio: true });
-  } catch (e) {
-    console.warn("getUserMedia video+audio:", e?.name, e?.message);
-  }
-
-  let audioStream = null;
-  try {
-    audioStream = await md.getUserMedia({ video: false, audio: true });
-  } catch (e) {
-    console.warn("getUserMedia audio-only:", e?.name, e?.message);
   }
 
   const mergeVideoInto = (aStream, videoConstraints) => {
@@ -37,6 +30,13 @@ async function acquireLocalMedia() {
       return new MediaStream([...aStream.getAudioTracks(), ...vStream.getVideoTracks()]);
     })();
   };
+
+  let audioStream = null;
+  try {
+    audioStream = await md.getUserMedia({ video: false, audio: true });
+  } catch (e) {
+    console.warn("getUserMedia audio-only:", e?.name, e?.message);
+  }
 
   if (audioStream) {
     const videoLegAttempts = [
@@ -98,6 +98,18 @@ async function acquireLocalMedia() {
     console.warn("getUserMedia 240p+audio:", e?.name, e?.message);
   }
 
+  try {
+    return await md.getUserMedia({ video: true, audio: true });
+  } catch (e) {
+    console.warn("getUserMedia video+audio fallback:", e?.name, e?.message);
+  }
+
+  try {
+    return await md.getUserMedia({ video: false, audio: true });
+  } catch (e) {
+    console.warn("getUserMedia final audio-only:", e?.name, e?.message);
+  }
+
   return md.getUserMedia({ video: true, audio: false });
 }
 
@@ -115,12 +127,52 @@ function formatMediaError(e) {
   if (e?.name === "AbortError" || /Timeout starting video/i.test(msg)) {
     return "The camera did not start in time — often because another app is using it. Close other video apps, then Retry.";
   }
+  if (e?.name === "NotSupportedError" || /HTTPS|secure/i.test(msg)) {
+    return "Camera and microphone need a secure context. Use https:// in production or http://localhost for development.";
+  }
+  if (e?.name === "TimeoutError") {
+    return "No response from camera or microphone in time. Click “Start camera & microphone” again, then choose Allow in Chrome’s prompt (or the lock icon → Site settings).";
+  }
   return msg || "Could not access camera or microphone.";
 }
 
+const MEDIA_WAIT_MS = 45000;
+
+function withMediaTimeout(promise, ms) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => {
+      reject(new DOMException("Camera or microphone did not respond in time.", "TimeoutError"));
+    }, ms);
+    promise.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      }
+    );
+  });
+}
+
+function createPeer(opts) {
+  return new Peer({
+    initiator: opts.initiator,
+    trickle: false,
+    stream: opts.stream,
+    config: ICE_SERVERS,
+  });
+}
+
 const Dashboard = () => {
-  const socket = socketInstance.getSocket();
-  const userData = AuthService.getUserData();
+  const user = AuthService.getUserData();
+  // Stable primitives for effect deps — getUserData() returns a new object every render (JSON.parse),
+  // so putting that object in useEffect deps caused an infinite re-render loop.
+  const joinId = user?._id != null ? String(user._id) : null;
+  const joinName = user?.name ?? "";
+
+  const [socketKey, setSocketKey] = useState(0);
 
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [stream, setStream] = useState(null);
@@ -136,8 +188,11 @@ const Dashboard = () => {
   const [callingToName, setCallingToName] = useState("");
 
   const [callNotice, setCallNotice] = useState(null);
+  const [socketError, setSocketError] = useState(null);
 
-  const [mediaLoading, setMediaLoading] = useState(true);
+  /** Browsers often block or never show the permission prompt unless getUserMedia runs from a click. */
+  const [mediaStarted, setMediaStarted] = useState(false);
+  const [mediaLoading, setMediaLoading] = useState(false);
   const [mediaError, setMediaError] = useState(null);
   const [mediaRetryKey, setMediaRetryKey] = useState(0);
 
@@ -148,6 +203,26 @@ const Dashboard = () => {
   const mediaLoadGenRef = useRef(0);
   const callingToNameRef = useRef("");
   const outgoingPeerUserIdRef = useRef(null);
+
+  const receivingCallRef = useRef(false);
+  const callInitiatedRef = useRef(false);
+  const callAcceptedRef = useRef(false);
+
+  useEffect(() => {
+    receivingCallRef.current = receivingCall;
+  }, [receivingCall]);
+  useEffect(() => {
+    callInitiatedRef.current = callInitiated;
+  }, [callInitiated]);
+  useEffect(() => {
+    callAcceptedRef.current = callAccepted;
+  }, [callAccepted]);
+
+  useEffect(() => {
+    const onTokenRefresh = () => setSocketKey((k) => k + 1);
+    window.addEventListener(ACCESS_TOKEN_UPDATED, onTokenRefresh);
+    return () => window.removeEventListener(ACCESS_TOKEN_UPDATED, onTokenRefresh);
+  }, []);
 
   useEffect(() => {
     callingToNameRef.current = callingToName;
@@ -187,6 +262,10 @@ const Dashboard = () => {
   }, [stream]);
 
   useEffect(() => {
+    if (!mediaStarted) {
+      return undefined;
+    }
+
     const myGen = ++mediaLoadGenRef.current;
 
     setMediaLoading(true);
@@ -194,7 +273,7 @@ const Dashboard = () => {
 
     (async () => {
       try {
-        const s = await acquireLocalMedia();
+        const s = await withMediaTimeout(acquireLocalMedia(), MEDIA_WAIT_MS);
         if (myGen !== mediaLoadGenRef.current) {
           s.getTracks().forEach((t) => t.stop());
           return;
@@ -218,28 +297,57 @@ const Dashboard = () => {
       }
       setStream(null);
     };
-  }, [mediaRetryKey]);
+  }, [mediaStarted, mediaRetryKey]);
+
+  const isInCallFlow = () =>
+    !!(
+      connectionRef.current ||
+      receivingCallRef.current ||
+      callInitiatedRef.current ||
+      callAcceptedRef.current
+    );
 
   useEffect(() => {
-    if (!socket || !userData) return;
+    if (!joinId) return;
 
-    socket.on("me", (id) => setMe(id));
-    socket.on("get-online-users", (users) => setOnlineUsers(users));
+    const s = socketInstance.getSocket();
+    if (!s) {
+      setSocketError("Not connected — sign in again.");
+      return;
+    }
 
-    socket.on("callToUser", (data) => {
+    setSocketError(null);
+
+    const onConnectError = (err) => {
+      console.warn("Socket connect_error:", err?.message);
+      setSocketError(
+        "Real-time connection failed. Try refreshing the page. If you were idle a long time, sign out and sign in again."
+      );
+    };
+
+    s.on("connect_error", onConnectError);
+
+    s.on("me", (id) => setMe(id));
+    s.on("get-online-users", (users) => setOnlineUsers(users));
+
+    s.on("callToUser", (data) => {
+      if (isInCallFlow()) {
+        s.emit("busyCall", { to: data.from });
+        return;
+      }
       setReceivingCall(true);
       setCaller(data.from);
       setCallerName(data.name);
       setCallerSignal(data.signal);
     });
 
-    socket.on("callAccepted", (signal) => {
+    s.on("callAccepted", (signal) => {
       setCallAccepted(true);
       setCallInitiated(false);
       if (connectionRef.current) connectionRef.current.signal(signal);
     });
 
-    socket.on("callRejected", () => {
+    s.on("callRejected", () => {
       if (connectionRef.current) {
         connectionRef.current.destroy();
         connectionRef.current = null;
@@ -251,7 +359,7 @@ const Dashboard = () => {
       setCallNotice(`${name} declined the call.`);
     });
 
-    socket.on("callFailed", () => {
+    s.on("callFailed", (payload) => {
       if (connectionRef.current) {
         try {
           connectionRef.current.destroy();
@@ -263,10 +371,14 @@ const Dashboard = () => {
       setCallInitiated(false);
       setCallingToName("");
       outgoingPeerUserIdRef.current = null;
-      setCallNotice("That user is offline or unavailable.");
+      if (payload?.reason === "busy") {
+        setCallNotice("That user is on another call.");
+      } else {
+        setCallNotice("That user is offline or unavailable.");
+      }
     });
 
-    socket.on("incomingCallCanceled", () => {
+    s.on("incomingCallCanceled", () => {
       setReceivingCall(false);
       setCaller("");
       setCallerName("");
@@ -274,29 +386,29 @@ const Dashboard = () => {
       setCallNotice("The caller canceled.");
     });
 
-    socket.on("callEnded", () => {
+    s.on("callEnded", () => {
       clearCallState();
       setCallNotice("The call ended.");
     });
 
-    const sendJoin = () =>
-      socket.emit("join", { id: userData._id, name: userData.name });
+    const sendJoin = () => s.emit("join", { id: joinId, name: joinName });
 
-    if (socket.connected) sendJoin();
-    else socket.once("connect", sendJoin);
+    if (s.connected) sendJoin();
+    else s.once("connect", sendJoin);
 
     return () => {
-      socket.off("me");
-      socket.off("get-online-users");
-      socket.off("callToUser");
-      socket.off("callAccepted");
-      socket.off("callRejected");
-      socket.off("callFailed");
-      socket.off("incomingCallCanceled");
-      socket.off("callEnded");
-      socket.off("connect", sendJoin);
+      s.off("connect_error", onConnectError);
+      s.off("me");
+      s.off("get-online-users");
+      s.off("callToUser");
+      s.off("callAccepted");
+      s.off("callRejected");
+      s.off("callFailed");
+      s.off("incomingCallCanceled");
+      s.off("callEnded");
+      s.off("connect", sendJoin);
     };
-  }, [socket, userData, clearCallState]);
+  }, [socketKey, joinId, joinName, clearCallState]);
 
   const hasVideoTrack =
     stream &&
@@ -304,6 +416,7 @@ const Dashboard = () => {
     stream.getVideoTracks().some((t) => t.readyState !== "ended");
 
   const callToUser = (userId, userName) => {
+    if (!joinId) return;
     if (!stream) {
       setCallNotice("Camera/microphone is not ready yet.");
       return;
@@ -312,22 +425,34 @@ const Dashboard = () => {
       setCallNotice("Connecting to server — try again in a moment.");
       return;
     }
+    if (isInCallFlow()) {
+      setCallNotice("Finish your current call before starting another.");
+      return;
+    }
 
     outgoingPeerUserIdRef.current = userId;
 
-    const peer = new Peer({ initiator: true, trickle: false, stream });
+    const peer = createPeer({ initiator: true, stream });
 
     peer.on("signal", (data) => {
-      socket.emit("callToUser", {
+      const sock = socketInstance.getSocket();
+      if (!sock) return;
+      sock.emit("callToUser", {
         callToUserId: userId,
         signalData: data,
         from: me,
-        name: userData.name,
+        name: joinName,
       });
     });
 
     peer.on("stream", (remoteStream) => {
       if (userVideo.current) userVideo.current.srcObject = remoteStream;
+    });
+
+    peer.on("error", (err) => {
+      console.error("Peer error (outgoing):", err);
+      setCallNotice("Connection error — try again.");
+      clearCallState();
     });
 
     peer.on("close", () => {
@@ -340,17 +465,26 @@ const Dashboard = () => {
   };
 
   const answerCall = () => {
+    if (!joinId || !stream) return;
     setCallAccepted(true);
     setReceivingCall(false);
 
-    const peer = new Peer({ initiator: false, trickle: false, stream });
+    const peer = createPeer({ initiator: false, stream });
 
     peer.on("signal", (data) => {
-      socket.emit("answerCall", { signal: data, to: caller });
+      const sock = socketInstance.getSocket();
+      if (!sock) return;
+      sock.emit("answerCall", { signal: data, to: caller });
     });
 
     peer.on("stream", (remoteStream) => {
       if (userVideo.current) userVideo.current.srcObject = remoteStream;
+    });
+
+    peer.on("error", (err) => {
+      console.error("Peer error (answer):", err);
+      setCallNotice("Connection error — try again.");
+      clearCallState();
     });
 
     peer.on("close", () => {
@@ -362,7 +496,8 @@ const Dashboard = () => {
   };
 
   const rejectCall = () => {
-    socket.emit("rejectCall", { to: caller });
+    const sock = socketInstance.getSocket();
+    if (sock) sock.emit("rejectCall", { to: caller });
     setReceivingCall(false);
     setCaller("");
     setCallerName("");
@@ -370,8 +505,9 @@ const Dashboard = () => {
   };
 
   const cancelOutgoingCall = () => {
-    if (outgoingPeerUserIdRef.current) {
-      socket.emit("cancelOutgoingCall", { toUserId: outgoingPeerUserIdRef.current });
+    const sock = socketInstance.getSocket();
+    if (outgoingPeerUserIdRef.current && sock) {
+      sock.emit("cancelOutgoingCall", { toUserId: outgoingPeerUserIdRef.current });
     }
     if (connectionRef.current) {
       try {
@@ -387,15 +523,31 @@ const Dashboard = () => {
   };
 
   const hangUp = () => {
-    if (callAccepted) {
+    const sock = socketInstance.getSocket();
+    if (callAccepted && sock) {
       if (outgoingPeerUserIdRef.current) {
-        socket.emit("endCall", { toUserId: outgoingPeerUserIdRef.current });
+        sock.emit("endCall", { toUserId: outgoingPeerUserIdRef.current });
       } else if (caller) {
-        socket.emit("endCall", { toSocketId: caller });
+        sock.emit("endCall", { toSocketId: caller });
       }
     }
     clearCallState();
     setCallNotice("You ended the call.");
+  };
+
+  if (!joinId) {
+    return <Navigate to="/login" replace />;
+  }
+
+  const startMedia = () => {
+    setMediaError(null);
+    setMediaStarted(true);
+  };
+
+  const retryMedia = () => {
+    setMediaError(null);
+    setMediaStarted(true);
+    setMediaRetryKey((k) => k + 1);
   };
 
   return (
@@ -403,6 +555,15 @@ const Dashboard = () => {
       <h2 className="text-xl text-gray-700 bg-white p-4 rounded shadow mb-4">
         Welcome to Dashboard
       </h2>
+
+      {socketError && (
+        <div
+          className="mb-4 px-4 py-3 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 text-sm"
+          role="alert"
+        >
+          {socketError}
+        </div>
+      )}
 
       {callNotice && (
         <div
@@ -413,7 +574,24 @@ const Dashboard = () => {
         </div>
       )}
 
-      {mediaLoading && (
+      {!mediaStarted && (
+        <div className="mb-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <p className="text-slate-800 text-sm mb-3">
+            <strong>Enable your camera and microphone.</strong> Chrome often will not show a permission prompt until you
+            click a button on this page (a security rule). Use the button below, then choose{" "}
+            <strong>Allow</strong> when asked.
+          </p>
+          <button
+            type="button"
+            onClick={startMedia}
+            className="w-full sm:w-auto rounded-lg bg-blue-600 px-6 py-3 text-white font-semibold shadow hover:bg-blue-700 transition"
+          >
+            Start camera &amp; microphone
+          </button>
+        </div>
+      )}
+
+      {mediaStarted && mediaLoading && (
         <p className="text-sm text-blue-800 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 mb-4">
           <strong>Camera permission:</strong> if Chrome shows a prompt for localhost, choose{" "}
           <strong>Allow while visiting the site</strong> (or <strong>Allow this time</strong>). The preview can stay
@@ -426,7 +604,7 @@ const Dashboard = () => {
           <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-3">{mediaError}</p>
           <button
             type="button"
-            onClick={() => setMediaRetryKey((k) => k + 1)}
+            onClick={retryMedia}
             className="text-sm font-medium text-blue-600 hover:text-blue-800 underline"
           >
             Retry camera &amp; microphone
@@ -452,18 +630,20 @@ const Dashboard = () => {
               </p>
               <button
                 type="button"
-                onClick={() => setMediaRetryKey((k) => k + 1)}
+                onClick={retryMedia}
                 className="text-sm font-medium text-blue-600 hover:text-blue-800 underline"
               >
                 Try camera again
               </button>
             </div>
           )}
-          {!stream && !mediaError && mediaLoading && (
+          {mediaStarted && !stream && !mediaError && mediaLoading && (
             <p className="text-gray-600 text-sm mt-2">Waiting for permission or device…</p>
           )}
-          {!stream && !mediaError && !mediaLoading && (
-            <p className="text-gray-500 text-sm mt-2">Starting…</p>
+          {!mediaStarted && (
+            <p className="text-gray-500 text-sm mt-2 text-center max-w-72">
+              Tap <strong>Start camera &amp; microphone</strong> above to begin.
+            </p>
           )}
         </div>
 

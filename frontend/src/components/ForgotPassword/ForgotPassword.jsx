@@ -11,13 +11,8 @@ const ForgotPassword = () => {
         event.preventDefault();
         setErrors({});
         
-        const formData = new FormData();
-  
-        formData.append("email", email);
-        
-    
         try {
-          const response = await AuthService.forgotPassword(formData);
+          const response = await AuthService.forgotPassword({ email });
           const data = response.data;
           alert(data.msg);
           if (data.success) {

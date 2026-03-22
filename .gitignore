@@ -2,3 +2,14 @@
 node_modules/
 backend/node_modules/
 frontend/node_modules/
+
+# Secrets — never commit real credentials
+.env
+.env.*
+!.env.example
+!**/.env.example
+backend/.env
+frontend/.env
+frontend/.env.development
+frontend/.env.production
+frontend/.env.local

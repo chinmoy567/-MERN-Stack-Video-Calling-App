@@ -4,14 +4,18 @@ const SocketServer = async (socket, io) => {
   socket.emit("me", socket.id);
 
   socket.on("join", (user) => {
-    socket.join(user.id);
-    const existingUser = onlineUsers.find((u) => u.userId === user.id);
+    const verifiedId = socket.userId;
+    if (!user || String(user.id) !== verifiedId) {
+      return;
+    }
+    socket.join(verifiedId);
+    const existingUser = onlineUsers.find((u) => u.userId === verifiedId);
 
     if (existingUser) {
       existingUser.socketId = socket.id;
     } else {
       onlineUsers.push({
-        userId: user.id,
+        userId: verifiedId,
         name: user.name,
         socketId: socket.id,
       });
@@ -46,6 +50,12 @@ const SocketServer = async (socket, io) => {
   socket.on("rejectCall", (data) => {
     console.log(`Call rejected — notifying caller socket: ${data.to}`);
     io.to(data.to).emit("callRejected");
+  });
+
+  socket.on("busyCall", (data) => {
+    if (data?.to) {
+      io.to(data.to).emit("callFailed", { reason: "busy" });
+    }
   });
   // ─────────────────────────────────────────────────────────────────────────
 

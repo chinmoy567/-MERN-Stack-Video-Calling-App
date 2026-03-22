@@ -1,23 +1,30 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AuthService from "../../../services/AuthService";
-import socketInstance from "../../../socket"; // only one import needed
+import socketInstance from "../../../socket";
 
-const Sidebar = ({callToUser ,isOpen, onlineUsers = [] }) => {
+const Sidebar = ({ callToUser, isOpen, onlineUsers = [] }) => {
   const [currentUserName, setCurrentUserName] = useState("");
   const navigate = useNavigate();
   const [users, setUsers] = useState([]);
+  const [listError, setListError] = useState(null);
 
   useEffect(() => {
     const fetchUsers = async () => {
+      setListError(null);
       try {
         const response = await AuthService.getAllUsers();
         const data = response.data;
         if (data.success) {
-          setUsers(data.data);
+          setUsers(data.data || []);
         }
       } catch (error) {
         console.log(error);
+        const msg =
+          error.response?.data?.msg ||
+          error.message ||
+          "Could not load contacts.";
+        setListError(msg);
       }
     };
 
@@ -28,22 +35,20 @@ const Sidebar = ({callToUser ,isOpen, onlineUsers = [] }) => {
   }, []);
 
   const handleLogout = () => {
-    // get the ACTUAL socket connection first
     const socket = socketInstance.getSocket();
 
     if (socket) {
-      socket.disconnect(); // properly disconnect socket
+      socket.disconnect();
     }
 
-    socketInstance.setSocket(); // set internal reference to null
-    AuthService.logoutUser();   // clear localStorage
+    socketInstance.setSocket();
+    AuthService.logoutUser();
     navigate("/login", { replace: true });
   };
 
   const isUserOnline = (userId) => {
-
-    
-    return onlineUsers.some((u) => u.userId === userId.toString());
+    const id = userId != null ? String(userId) : "";
+    return onlineUsers.some((u) => String(u.userId) === id);
   };
 
   return (
@@ -53,7 +58,7 @@ const Sidebar = ({callToUser ,isOpen, onlineUsers = [] }) => {
       ${isOpen ? "translate-x-0" : "-translate-x-full"}`}
     >
       <div className="bg-blue-200 px-4 py-4 font-semibold text-lg text-black">
-        Project Name
+        Video Calling
       </div>
       <div className="bg-blue-200 px-4 py-4">
         <button
@@ -67,6 +72,16 @@ const Sidebar = ({callToUser ,isOpen, onlineUsers = [] }) => {
       <div className="px-4 py-2 text-sm text-gray-300">
         Hi, {currentUserName}
       </div>
+
+      {listError && (
+        <div className="px-4 py-2 text-xs text-red-300 border-b border-gray-700">
+          {listError}
+        </div>
+      )}
+
+      {!listError && users.length === 0 && (
+        <div className="px-4 py-3 text-sm text-gray-500">No other users yet.</div>
+      )}
 
       <ul className="mb-5">
         {users.map((user) => (

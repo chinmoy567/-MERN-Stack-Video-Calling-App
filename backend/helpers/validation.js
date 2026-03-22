@@ -76,8 +76,26 @@ exports.otpMailValidator = [
     gmail_remove_dots: true,
   }),
 ];
+// reset password submit (JSON)
+exports.resetPasswordSubmitValidator = [
+  check("user_id", "User Id is required").not().isEmpty(),
+  check("token", "Token is required").not().isEmpty(),
+  check("password", "Password is required").not().isEmpty(),
+  check("password").isStrongPassword({
+    minLength: 6,
+    minUppercase: 1,
+    minLowercase: 1,
+    minNumbers: 1,
+  }),
+  check("c_password", "Confirm password is required").not().isEmpty(),
+];
+
 //verifyOtpValidator
 exports.verifyOtpValidator = [
   check("user_id", "User Id is required").not().isEmpty(),
-  check("otp", "OTP is required").not().isEmpty(),
+  check("otp", "Enter the 6-digit OTP")
+    .not()
+    .isEmpty()
+    .isLength({ min: 6, max: 6 })
+    .isNumeric(),
 ];

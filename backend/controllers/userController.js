@@ -18,25 +18,38 @@ const mailer = require("../helpers/mailer");
 const { oneMinuteExpiry,threeMinuteExpiry } = require("../helpers/otpValidate");
 
 
+const frontendBaseUrl = () =>
+  process.env.FRONTEND_URL || process.env.CORS_ORIGIN || "http://localhost:5173";
+
 //necessary functions
-// 1. Generate JWT access Token
-const generateAccessToken = async (user) => {
-  const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
-    expiresIn: "48h",
-  });
-  return token;
-};
-// 2. Generate JWT refresh Token
-const generateRefreshToken = async (user) => {
-  const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
-    expiresIn: "96h",
-  });
-  return token;
-};
-// 3. Generate Random 4 Digit OTP
-const generateRandom4Digit = async () => {
-    return Math.floor(1000 + Math.random() * 9000);
-}
+const generateAccessToken = (userId) =>
+  jwt.sign(
+    { sub: String(userId), typ: "access" },
+    process.env.ACCESS_TOKEN_SECRET,
+    { expiresIn: "1h" }
+  );
+
+const generateRefreshToken = (userId) =>
+  jwt.sign(
+    { sub: String(userId), typ: "refresh" },
+    process.env.REFRESH_TOKEN_SECRET,
+    { expiresIn: "7d" }
+  );
+
+const generateEmailVerificationToken = (userId) =>
+  jwt.sign(
+    { sub: String(userId), typ: "verify" },
+    process.env.EMAIL_TOKEN_SECRET,
+    { expiresIn: "48h" }
+  );
+
+const genericEmailResponse = () => ({
+  success: true,
+  msg: "If an account exists for that email, we sent a message with next steps.",
+});
+
+// 6-digit OTP
+const generateRandomOtp = () => Math.floor(100000 + Math.random() * 900000);
 
 
 
@@ -44,7 +57,6 @@ const generateRandom4Digit = async () => {
 const userRegister = async (req, res) => {
   try {
     const errors = validationResult(req);
-    // res.setHeader("Content-Type", "application/json");
     if (!errors.isEmpty()) {
       return res.status(400).json({
         success: false,
@@ -59,7 +71,7 @@ const userRegister = async (req, res) => {
   if (isExists) {
     return res.status(400).json({
       success: false,
-      msg: "User already exists"
+      msg: "Unable to register with this email address.",
     });
   }
   const hashPassword = await bcrypt.hash(password, 10);
@@ -73,9 +85,10 @@ const userRegister = async (req, res) => {
 
     const userData = await user.save();
 
+    const verifyToken = generateEmailVerificationToken(userData._id);
     const msg = `
   <h1>Welcome to our Application</h1>
-  <p>Please <a href="http://localhost:4000/mail-verification?id=${userData._id}">verify your email</a></p>
+  <p>Please <a href="${frontendBaseUrl()}/verify-email?token=${verifyToken}">verify your email</a></p>
 `;
 
 mailer.sendMail(email, "Mail Verification", msg);
@@ -89,43 +102,74 @@ mailer.sendMail(email, "Mail Verification", msg);
    catch (error) {
     return res.status(400).json({
       success: false,
-      msg: "problem  with user register" + error.message,
+      msg: "Registration could not be completed.",
     });
   }
 };
 
-// mailVerification controller
-const mailVerification = async (req, res) => {
+// GET /api/verify-email?token= — JSON only (UI is React)
+const verifyEmail = async (req, res) => {
+  try {
+    const token = req.query.token;
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        status: "missing_token",
+        message: "Verification token is required.",
+      });
+    }
+
+    let decoded;
     try {
-
-      if (req.query.id == undefined) {
-          return res.render('404');
-        }
-
-      const userData = await User.findOne({ _id: req.query.id }); 
-      if(userData) {
-      if (userData.is_verified == 1) {
-      return res.render("mail-verification", {
-        message: "Your mail already verified Successfully!",
-      });
-      }
-
-     await User.findByIdAndUpdate(req.query.id,{$set: { is_verified: 1 },});
-      return res.render("mail-verification", {
-      message: "Mail has been verified Successfully",
+      decoded = jwt.verify(token, process.env.EMAIL_TOKEN_SECRET);
+    } catch {
+      return res.status(400).json({
+        success: false,
+        status: "invalid_or_expired",
+        message: "This verification link is invalid or has expired.",
       });
     }
 
-    else{
-      return res.render('mail-verification',{message:'usernot found'});
+    if (decoded.typ !== "verify") {
+      return res.status(400).json({
+        success: false,
+        status: "invalid_token",
+        message: "Invalid verification token.",
+      });
     }
-  } 
 
-  catch(error) {
-    console.log("error when verifying maill" + error.message);
-    return res.render('404');
+    const userData = await User.findById(decoded.sub);
+    if (!userData) {
+      return res.status(404).json({
+        success: false,
+        status: "user_not_found",
+        message: "User not found.",
+      });
+    }
+
+    if (userData.is_verified == 1) {
+      return res.status(200).json({
+        success: true,
+        status: "already_verified",
+        message: "Your email is already verified.",
+      });
+    }
+
+    await User.findByIdAndUpdate(decoded.sub, { $set: { is_verified: 1 } });
+    return res.status(200).json({
+      success: true,
+      status: "verified",
+      message: "Mail has been verified successfully.",
+    });
+  } catch (error) {
+    console.log("error when verifying mail" + error.message);
+    return res.status(500).json({
+      success: false,
+      status: "server_error",
+      message: "Verification could not be completed.",
+    });
   }
-}
+};
 
 // sendMailVerification controller
 const sendMailVerification = async (req, res) => {
@@ -142,36 +186,23 @@ const sendMailVerification = async (req, res) => {
     const { email } = req.body;
     const userData = await User.findOne({ email });
 
-      if (!userData) {
-        return res.status(400).json({
-          success: false,
-          msg: "Email doesn't exists!",
-        });
-      }
-      if (userData.is_verified == 1) {
-        return res.status(400).json({
-          success: false,
-          msg: userData.email + " mail is already verified!",
-        });
+      if (!userData || userData.is_verified == 1) {
+        return res.status(200).json(genericEmailResponse());
       }
 
-
+        const verifyToken = generateEmailVerificationToken(userData._id);
         const msg = `
         <h1>Welcome to our Application, '${userData.name}'</h1>
-        <p>Please <a href="http://localhost:4000/mail-verification?id=${userData._id}">verify your email</a></p>
+        <p>Please <a href="${frontendBaseUrl()}/verify-email?token=${verifyToken}">verify your email</a></p>
       `;
       mailer.sendMail(userData.email, "Mail Verification", msg);
-          return res.status(200).json({
-            success: true,
-            msg: "verification link send to your  mail",
-
-          });  
-  } 
+          return res.status(200).json(genericEmailResponse());
+  }
 
   catch (error) {
     return res.status(400).json({
       success: false,
-      msg: error.message,
+      msg: "Request could not be processed.",
     });
   }
 };
@@ -191,16 +222,11 @@ const forgotPassword = async (req, res) => {
       const { email } = req.body;
       const userData = await User.findOne({ email });
 
-      if (!userData) {
-        return res.status(400).json({
-          success: false,
-          msg: "Email doesn't exists!",
-        });
-      }
+      if (userData) {
 
       const randomString = randomstring.generate();
 
-      msg ="<p>Hii "+userData.name +',Please click <a href="http://localhost:4000/reset-password?token='+randomString+'">here</a> to reset your password.</p>';
+      const msg ="<p>Hii "+userData.name +',Please click <a href="'+frontendBaseUrl()+'/reset-password?token='+randomString+'">here</a> to reset your password.</p>';
       await PasswordReset.deleteMany({ user_id: userData._id });
       const passwordReset = new PasswordReset({
         user_id: userData._id,
@@ -209,74 +235,110 @@ const forgotPassword = async (req, res) => {
 
       await passwordReset.save();
       mailer.sendMail(userData.email, "Reset Password", msg)
+      }
       return res.status(201).json({
         success: true,
-        msg: "Reset Password Link send to your mail, please check!",
+        msg: "If an account exists for that email, a reset link has been sent.",
       });
     }
     catch (error) {
       return res.status(400).json({
         success: false,
-        msg: error.message,
+        msg: "Request could not be processed.",
       });
     }
 };
 
 
-//resetPassword controller
-const resetPassword = async (req, res) => {
+// GET /api/reset-password/validate?token=
+const validateResetToken = async (req, res) => {
   try {
-    if (req.query.token == undefined) {
-      return res.render("404");
+    const token = req.query.token;
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        status: "missing_token",
+        message: "Reset token is required.",
+      });
     }
 
-    const resetData = await PasswordReset.findOne({ token: req.query.token });
-
+    const resetData = await PasswordReset.findOne({ token });
     if (!resetData) {
-      return res.render("404");
+      return res.status(400).json({
+        success: false,
+        status: "invalid_or_expired",
+        message: "This reset link is invalid or has expired.",
+      });
     }
-    
-    return res.render("reset-password", { resetData });
-  }
-   catch (error) {
-    return res.render("404");
+
+    return res.status(200).json({
+      success: true,
+      status: "valid",
+      data: {
+        userId: resetData.user_id,
+        token: resetData.token,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      status: "server_error",
+      message: "Could not validate reset link.",
+    });
   }
 };
 
-// updatePassword controller
+// POST /api/reset-password (JSON body)
 const updatePassword = async (req, res) => {
   try {
-    const { user_id, password, c_password } = req.body;
-    const resetData = await PasswordReset.findOne({ user_id });
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        msg: "Errors",
+        errors: errors.array(),
+      });
+    }
+
+    const { user_id, password, c_password, token } = req.body;
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        status: "missing_token",
+        message: "Invalid or expired reset link.",
+      });
+    }
+    const resetData = await PasswordReset.findOne({ user_id, token });
+    if (!resetData) {
+      return res.status(400).json({
+        success: false,
+        status: "invalid_or_expired",
+        message: "Invalid or expired reset link.",
+      });
+    }
     if (password != c_password) {
-      return res.render("reset-password", {
-        resetData,
-        error:"Confirm Password does not match Password.",
+      return res.status(400).json({
+        success: false,
+        status: "password_mismatch",
+        message: "Confirm password does not match password.",
       });
     }
     const hashedPassword = await bcrypt.hash(c_password, 10);
-    await User.findByIdAndUpdate({ _id: user_id },
-      {
-        $set: {
-          password: hashedPassword
-        },
-      }
-    );
+    await User.findByIdAndUpdate(user_id, {
+      $set: {
+        password: hashedPassword,
+      },
+    });
     await PasswordReset.deleteMany({ user_id });
-    return res.redirect("/reset-success");
-  } 
-
-  catch (error) {
-    return res.render("404");
-  }
-};
-
-// resetSuccess controller
-const resetSuccess = async (req, res) => {
-  try {
-    return res.render("reset-success");
+    return res.status(200).json({
+      success: true,
+      message: "Password reset successfully.",
+    });
   } catch (error) {
-    return res.render("404");
+    return res.status(500).json({
+      success: false,
+      message: "Password reset could not be completed.",
+    });
   }
 };
 
@@ -293,7 +355,7 @@ const loginUser = async (req, res) => {
       }
 
       const { email, password } = req.body;
-      const userData = await User.findOne({ email });
+      const userData = await User.findOne({ email }).select("+password");
 
       //check for  Email
       if (!userData) {
@@ -318,13 +380,17 @@ const loginUser = async (req, res) => {
         });
       }
 
-      const refreshToken = await generateRefreshToken({ user: userData });
-      const accessToken = await generateAccessToken({ user: userData });
+      const uid = userData._id;
+      const refreshToken = generateRefreshToken(uid);
+      const accessToken = generateAccessToken(uid);
+
+      const userJson = userData.toObject();
+      delete userJson.password;
 
       return res.status(200).json({
         success: true,
         msg: "Login Successfully!",
-        user: userData,
+        user: userJson,
         accessToken: accessToken,
         refreshToken: refreshToken,
         tokenType: "Bearer",
@@ -334,15 +400,15 @@ const loginUser = async (req, res) => {
     catch (error) {
       return res.status(400).json({
         success: false,
-        msg: error.message,
+        msg: "Login could not be completed.",
       });
     }
 };
 
-// userProfile controller 
+// userProfile controller
 const userProfile = async (req, res) => {
   try {
-  const userData = req.user.user;
+  const userData = await User.findById(req.user.userId);
   return res.status(200).json({
     success: true,
     msg: "User Profile Data!",
@@ -371,7 +437,7 @@ const updateProfile = async (req, res) => {
       }
       const { name, mobile } = req.body;
       const data = {name,mobile};
-      const user_id = req.user.user._id;
+      const user_id = req.user.userId;
 
       if (req.file != undefined) {
         data.image = "images/" + req.file.filename;
@@ -380,7 +446,7 @@ const updateProfile = async (req, res) => {
         deleteFile(oldFilePath);
         }
       const userData = await User.findByIdAndUpdate(
-        { _id:user_id },
+        user_id,
         { $set: data }, { new: true }
       );
 
@@ -400,20 +466,28 @@ const updateProfile = async (req, res) => {
 
 // refreshToken controller
 const refreshToken = async (req, res) => {
+
   try {
-    
-    const userId = req.user.user_id;
+
+    const userId = req.user.userId;
 
     const userData = await User.findOne({ _id: userId });
 
-    const accessToken = await generateAccessToken({ user: userData });
-    const refreshToken = await generateRefreshToken({ user: userData });
+    if (!userData) {
+      return res.status(401).json({
+        success: false,
+        msg: "User not found",
+      });
+    }
+
+    const accessToken = generateAccessToken(userId);
+    const newRefreshToken = generateRefreshToken(userId);
 
     return res.status(200).json({
       success: true,
       msg: "Token Refreshed!",
       accessToken: accessToken,
-      refreshToken: refreshToken,
+      refreshToken: newRefreshToken,
     });
   } catch (error) {
     return res.status(400).json({
@@ -431,8 +505,11 @@ const logout = async (req, res) => {
       req.query.token ||
       req.headers["authorization"];
 
-    const bearer = token.split(" ");
-    const bearerToken = bearer[1];
+    if (!token || typeof token !== "string") {
+      return res.status(400).json({ success: false, msg: "Token required" });
+    }
+    const parts = token.trim().split(/\s+/);
+    const bearerToken = parts.length === 2 && parts[0] === "Bearer" ? parts[1] : parts[0];
 
     const newBlacklist = new Blacklist({
       token: bearerToken,
@@ -445,7 +522,7 @@ const logout = async (req, res) => {
       success: true,
       msg: "You are logged out!",
     });
-  } 
+  }
   catch (error) {
     return res.status(400).json({
       success: false,
@@ -469,21 +546,11 @@ const sendOtp = async (req, res) => {
     const { email } = req.body;
     const userData = await User.findOne({ email });
 
-    if (!userData) {
-      return res.status(400).json({
-        success: false,
-        msg: "Email doesn't exists!",
-      });
+    if (!userData || userData.is_verified == 1) {
+      return res.status(200).json(genericEmailResponse());
     }
 
-    if (userData.is_verified == 1) {
-      return res.status(400).json({
-        success: false,
-        msg: userData.email + " mail is already verified!",
-      });
-    }
-
-    const g_otp = await generateRandom4Digit();
+    const g_otp = await generateRandomOtp();
     const oldOtpData = await Otp.findOne({ user_id: userData._id });
 
     if (oldOtpData) {
@@ -503,19 +570,16 @@ const sendOtp = async (req, res) => {
     );
 
     const msg =
-      "<p> Hii <b>" + userData.name + "</b>, </br> <h4>" + g_otp + "</h4></p>"; 
+      "<p> Hii <b>" + userData.name + "</b>, </br> <h4>" + g_otp + "</h4></p>";
 
     mailer.sendMail(userData.email, "Otp Verification", msg);
 
-    return res.status(200).json({
-      success: true,
-      msg: "Otp has been sent to your mail, please check!",
-    });
-  } 
+    return res.status(200).json(genericEmailResponse());
+  }
   catch (error) {
     return res.status(400).json({
       success: false,
-      msg: error.message,
+      msg: "Request could not be processed.",
     });
   }
 };
@@ -537,7 +601,7 @@ const verifyOtp = async (req, res) => {
 
     const otpData = await Otp.findOne({
       user_id,
-      otp,
+      otp: Number(otp),
     });
 
     if (!otpData) {
@@ -571,7 +635,7 @@ const verifyOtp = async (req, res) => {
       success: true,
       msg: "Account Verified Successfully!",
     });
- 
+
   } catch (error) {
     return res.status(400).json({
       success: false,
@@ -584,11 +648,11 @@ const verifyOtp = async (req, res) => {
 const getAllUsers = async (req, res) => {
   try {
 
-    const userId = req.user.user._id;
+    const userId = req.user.userId;
 
     const users = await User.find({
       _id: { $ne: userId }
-    });
+    }).select("-password");
 
     return res.status(200).json({
       success: true,
@@ -606,12 +670,11 @@ const getAllUsers = async (req, res) => {
 
 module.exports = {
   userRegister,
-  mailVerification,
+  verifyEmail,
   sendMailVerification,
   forgotPassword,
-  resetPassword,
+  validateResetToken,
   updatePassword,
-  resetSuccess,
   loginUser,
   userProfile,
   updateProfile,
@@ -621,4 +684,3 @@ module.exports = {
   verifyOtp,
   getAllUsers
 };
-   
