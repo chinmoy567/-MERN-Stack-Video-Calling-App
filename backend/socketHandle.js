@@ -20,7 +20,9 @@ const SocketServer = async (socket, io) => {
   });
 
   socket.on("callToUser", (data) => {
-    console.log(`Incoming call from ${data.from} (${data.name}) to userId ${data.callToUserId}`);
+    console.log(
+      `Incoming call from ${data.from} (${data.name}) to userId ${data.callToUserId}`
+    );
     const userSocketData = onlineUsers.find(
       (user) => user.userId == data.callToUserId
     );
@@ -32,11 +34,37 @@ const SocketServer = async (socket, io) => {
       });
     } else {
       console.log("Target user not found or offline");
+      socket.emit("callFailed", { reason: "offline" });
     }
   });
 
   socket.on("answerCall", (data) => {
     io.to(data.to).emit("callAccepted", data.signal);
+  });
+
+  // ── Reject Call ──────────────────────────────────────────────────────────
+  socket.on("rejectCall", (data) => {
+    console.log(`Call rejected — notifying caller socket: ${data.to}`);
+    io.to(data.to).emit("callRejected");
+  });
+  // ─────────────────────────────────────────────────────────────────────────
+
+  socket.on("cancelOutgoingCall", (data) => {
+    const peer = onlineUsers.find((u) => u.userId == data.toUserId);
+    if (peer) {
+      io.to(peer.socketId).emit("incomingCallCanceled");
+    }
+  });
+
+  socket.on("endCall", (data) => {
+    if (data.toSocketId) {
+      io.to(data.toSocketId).emit("callEnded");
+    } else if (data.toUserId != null && data.toUserId !== "") {
+      const peer = onlineUsers.find((u) => u.userId == data.toUserId);
+      if (peer) {
+        io.to(peer.socketId).emit("callEnded");
+      }
+    }
   });
 
   socket.on("disconnect", () => {

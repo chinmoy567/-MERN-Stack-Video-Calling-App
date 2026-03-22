@@ -41,6 +41,8 @@ const Sidebar = ({callToUser ,isOpen, onlineUsers = [] }) => {
   };
 
   const isUserOnline = (userId) => {
+
+    
     return onlineUsers.some((u) => u.userId === userId.toString());
   };
 
@@ -70,7 +72,7 @@ const Sidebar = ({callToUser ,isOpen, onlineUsers = [] }) => {
         {users.map((user) => (
           <li
             key={user._id}
-            onClick={() => callToUser(user._id)}
+            onClick={() => callToUser(user._id, user.name)}
             className="flex items-center gap-4 px-4 py-3 rounded-lg hover:bg-gray-700 cursor-pointer transition"
           >
             <div className="relative">
