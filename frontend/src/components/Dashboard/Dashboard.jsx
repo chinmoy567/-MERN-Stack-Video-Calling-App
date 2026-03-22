@@ -2,22 +2,21 @@ import { useEffect, useRef, useState } from "react";
 import Layout from "../Layouts/Layout/Layout";
 import socketInstance from "../../socket";
 import AuthService from "../../services/AuthService";
+import Peer from "simple-peer";
 
 const Dashboard = () => {
+  const socket = socketInstance.getSocket();
+  const userData = AuthService.getUserData();
+
   const [onlineUsers, setOnlineUsers] = useState([]);
-  const myVideo = useRef();
   const [stream, setStream] = useState(null);
+  const [me, setMe] = useState("");
+  const myVideo = useRef();
+  const connectionRef = useRef();
 
   useEffect(() => {
-    const socket = socketInstance.getSocket();
-    const userData = AuthService.getUserData();
-
-    // get camera and mic
     navigator.mediaDevices
-      .getUserMedia({
-        video: true,
-        audio: true,
-      })
+      .getUserMedia({ video: true, audio: true })
       .then((currentStream) => {
         setStream(currentStream);
         if (myVideo.current) {
@@ -30,11 +29,14 @@ const Dashboard = () => {
 
     if (!socket || !userData) return;
 
-    const handleOnlineUsers = (users) => {
+    socket.on("get-online-users", (users) => {
       setOnlineUsers(users);
-    };
+    });
 
-    socket.on("get-online-users", handleOnlineUsers);
+    socket.on("me", (id) => {
+      console.log("my socket id is", id);
+      setMe(id);
+    });
 
     const sendJoin = () => {
       socket.emit("join", {
@@ -50,19 +52,41 @@ const Dashboard = () => {
     }
 
     return () => {
-      socket.off("get-online-users", handleOnlineUsers);
+      socket.off("get-online-users");
+      socket.off("me");
       socket.off("connect", sendJoin);
     };
   }, []);
 
+  const callToUser = (id) => {
+    console.log("call to user id", id);
+
+    const peer = new Peer({
+      initiator: true,
+      trickle: false,
+      stream: stream,
+    });
+
+    peer.on("signal", (data) => {
+      console.log("call to user with signal event");
+      socket.emit("callToUser", {
+        callToUserId: id,
+        signalData: data,
+        from: me,
+        name: userData.name,
+      });
+    });
+
+    connectionRef.current = peer;
+  };
+
   return (
-    <Layout onlineUsers={onlineUsers}>
+    <Layout onlineUsers={onlineUsers} callToUser={callToUser}>
       <h2 className="text-xl text-gray-700 bg-white p-4 rounded shadow mb-4">
         Welcome to Dashboard
       </h2>
 
       <div className="flex flex-wrap gap-4">
-        {/* Local Video */}
         <div className="flex flex-col items-center">
           <h4 className="text-gray-700 font-semibold mb-2">Your Camera</h4>
           <div className="w-72 h-48 bg-black rounded-lg overflow-hidden border-2 border-blue-500">
@@ -75,19 +99,14 @@ const Dashboard = () => {
             />
           </div>
           {!stream && (
-            <p className="text-red-500 text-sm mt-2">
-              Camera not available
-            </p>
+            <p className="text-red-500 text-sm mt-2">Camera not available</p>
           )}
         </div>
 
-        {/* Remote Video - placeholder for now */}
         <div className="flex flex-col items-center">
           <h4 className="text-gray-700 font-semibold mb-2">Remote Camera</h4>
           <div className="w-72 h-48 bg-black rounded-lg overflow-hidden border-2 border-gray-500 flex items-center justify-center">
-            <p className="text-gray-400 text-sm">
-              Waiting for connection...
-            </p>
+            <p className="text-gray-400 text-sm">Waiting for connection...</p>
           </div>
         </div>
       </div>

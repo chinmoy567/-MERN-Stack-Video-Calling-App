@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import AuthService from "../../../services/AuthService";
 import socketInstance from "../../../socket"; // only one import needed
 
-const Sidebar = ({ isOpen, onlineUsers = [] }) => {
+const Sidebar = ({callToUser ,isOpen, onlineUsers = [] }) => {
   const [currentUserName, setCurrentUserName] = useState("");
   const navigate = useNavigate();
   const [users, setUsers] = useState([]);
@@ -70,6 +70,7 @@ const Sidebar = ({ isOpen, onlineUsers = [] }) => {
         {users.map((user) => (
           <li
             key={user._id}
+            onClick={() => callToUser(user._id)}
             className="flex items-center gap-4 px-4 py-3 rounded-lg hover:bg-gray-700 cursor-pointer transition"
           >
             <div className="relative">

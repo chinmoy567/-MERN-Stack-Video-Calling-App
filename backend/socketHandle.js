@@ -1,6 +1,8 @@
 let onlineUsers = [];
 
 const SocketServer = async (socket, io) => {
+  socket.emit("me", socket.id);
+
   socket.on("join", (user) => {
     socket.join(user.id);
     const existingUser = onlineUsers.find((u) => u.userId === user.id);
@@ -17,19 +19,22 @@ const SocketServer = async (socket, io) => {
     io.emit("get-online-users", onlineUsers);
   });
 
+socket.on("callToUser", (data) => {
+  console.log(`Backend catch:- Incoming call from ${data.from + ' ' + data.name}`);
+
+  let userSocketId = onlineUsers.find((user) => user.userId == data.callToUserId);
+
+  if (userSocketId) {
+    console.log("call to user id", userSocketId);
+  }
+});
+
   //socket disconnect
   socket.on("disconnect", () => {
-    
-    // console.log("Before disconnect online users:", onlineUsers);
-
     onlineUsers = onlineUsers.filter((user) => user.socketId !== socket.id);
-
-    // console.log("after disconnect onlin users:", onlineUsers);
-
     io.emit("get-online-users", onlineUsers);
   });
 };
 module.exports = {
   SocketServer,
-  onlineUsers,
 };
