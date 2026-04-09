@@ -14,9 +14,27 @@ const ICE_SERVERS = {
   ],
 };
 
+// Per-attempt timeout so a hanging camera driver doesn't freeze the whole chain.
+// 8 s is enough for even a slow device; Chrome usually rejects bad constraints in < 2 s.
+const ATTEMPT_TIMEOUT_MS = 8000;
+
+function gum(constraints) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(
+      () => reject(new DOMException("getUserMedia timed out.", "TimeoutError")),
+      ATTEMPT_TIMEOUT_MS
+    );
+    navigator.mediaDevices.getUserMedia(constraints).then(
+      (s) => { clearTimeout(t); resolve(s); },
+      (e) => { clearTimeout(t); reject(e); }
+    );
+  });
+}
+
 /**
  * Prefer microphone first, then add camera — avoids Chrome on Windows aborting with
  * "AbortError: Timeout starting video source" on the common first call { video:true, audio:true }.
+ * Each getUserMedia call has its own 8 s timeout so a hung driver doesn't block indefinitely.
  */
 async function acquireLocalMedia() {
   const md = navigator.mediaDevices;
@@ -24,16 +42,14 @@ async function acquireLocalMedia() {
     throw new DOMException("Use HTTPS or localhost for camera/microphone.", "NotSupportedError");
   }
 
-  const mergeVideoInto = (aStream, videoConstraints) => {
-    return (async () => {
-      const vStream = await md.getUserMedia(videoConstraints);
-      return new MediaStream([...aStream.getAudioTracks(), ...vStream.getVideoTracks()]);
-    })();
+  const mergeVideoInto = async (aStream, videoConstraints) => {
+    const vStream = await gum(videoConstraints);
+    return new MediaStream([...aStream.getAudioTracks(), ...vStream.getVideoTracks()]);
   };
 
   let audioStream = null;
   try {
-    audioStream = await md.getUserMedia({ video: false, audio: true });
+    audioStream = await gum({ video: false, audio: true });
   } catch (e) {
     console.warn("getUserMedia audio-only:", e?.name, e?.message);
   }
@@ -77,40 +93,26 @@ async function acquireLocalMedia() {
       console.warn("enumerateDevices:", e);
     }
 
+    // All video attempts failed — return audio-only so voice calls still work
     return audioStream;
   }
 
-  try {
-    return await md.getUserMedia({
-      video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { max: 24 } },
-      audio: true,
-    });
-  } catch (e) {
-    console.warn("getUserMedia 640p+audio:", e?.name, e?.message);
+  // No audio stream — try combined fallbacks
+  for (const constraints of [
+    { video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { max: 24 } }, audio: true },
+    { video: { width: { ideal: 320 }, height: { ideal: 240 } }, audio: true },
+    { video: true, audio: true },
+    { video: false, audio: true },
+    { video: true, audio: false },
+  ]) {
+    try {
+      return await gum(constraints);
+    } catch (e) {
+      console.warn("getUserMedia fallback failed:", JSON.stringify(constraints), e?.name, e?.message);
+    }
   }
 
-  try {
-    return await md.getUserMedia({
-      video: { width: { ideal: 320 }, height: { ideal: 240 } },
-      audio: true,
-    });
-  } catch (e) {
-    console.warn("getUserMedia 240p+audio:", e?.name, e?.message);
-  }
-
-  try {
-    return await md.getUserMedia({ video: true, audio: true });
-  } catch (e) {
-    console.warn("getUserMedia video+audio fallback:", e?.name, e?.message);
-  }
-
-  try {
-    return await md.getUserMedia({ video: false, audio: true });
-  } catch (e) {
-    console.warn("getUserMedia final audio-only:", e?.name, e?.message);
-  }
-
-  return md.getUserMedia({ video: true, audio: false });
+  throw new DOMException("Could not access any camera or microphone.", "NotFoundError");
 }
 
 function formatMediaError(e) {
@@ -131,12 +133,15 @@ function formatMediaError(e) {
     return "Camera and microphone need a secure context. Use https:// in production or http://localhost for development.";
   }
   if (e?.name === "TimeoutError") {
-    return "No response from camera or microphone in time. Click “Start camera & microphone” again, then choose Allow in Chrome’s prompt (or the lock icon → Site settings).";
+    return "No response from camera or microphone in time. Make sure no other app (Zoom, Teams, WhatsApp) is using the camera, then click Retry below.";
+  }
+  if (e?.name === "NotFoundError") {
+    return "No camera or microphone found. Plug in a device and click Retry below.";
   }
   return msg || "Could not access camera or microphone.";
 }
 
-const MEDIA_WAIT_MS = 45000;
+const MEDIA_WAIT_MS = 20000;
 
 function withMediaTimeout(promise, ms) {
   return new Promise((resolve, reject) => {
@@ -625,7 +630,7 @@ const Dashboard = () => {
               </p>
               <p className="text-gray-600 text-xs">
                 If WhatsApp (or Zoom / Teams) is in a video call, it may hold the camera — then Chrome cannot show video
-                here, and WhatsApp may say “camera used by another app” if Chrome grabbed it first. Use one app at a time,
+                here, and WhatsApp may say "camera used by another app" if Chrome grabbed it first. Use one app at a time,
                 or plug in a second camera. Also check Windows Settings → Privacy → Camera for Chrome.
               </p>
               <button
