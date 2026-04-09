@@ -16,31 +16,39 @@ class AuthService {
 
   // Axios instance with interceptors
   constructor() {
-    this.axiosInstance = axios.create();
+    this._refreshPromise = null;
+
+    this.axiosInstance = axios.create({ timeout: 10000 });
     this.axiosInstance.interceptors.response.use(
       (response) => response,
       async (error) => {
         const originalRequest = error.config;
 
-        if (error.response.status === 401 && !originalRequest._retry) {
-          originalRequest._retry = true;
-
-          try {
-            // if refresh token is not expired
-            await this.refreshToken();
-            const newAccessToken = localStorage.getItem("accessToken");
-            originalRequest.headers["Authorization"] =
-            "Bearer " + newAccessToken;
-            return this.axiosInstance(originalRequest);
-
-          } catch (e) {
-            // refresh token also expired
-            this.logoutUser();
-            window.location.href = "/login";
-            return Promise.reject(e);
-          }
+        if (!error.response || error.response.status !== 401 || originalRequest._retry) {
+          return Promise.reject(error);
         }
-      } 
+
+        originalRequest._retry = true;
+
+        // Prevent parallel refresh calls — reuse in-flight promise
+        if (!this._refreshPromise) {
+          this._refreshPromise = this.refreshToken().finally(() => {
+            this._refreshPromise = null;
+          });
+        }
+
+        try {
+          await this._refreshPromise;
+          const newAccessToken = localStorage.getItem("accessToken");
+          originalRequest.headers["Authorization"] = "Bearer " + newAccessToken;
+          return this.axiosInstance(originalRequest);
+        } catch (e) {
+          // refresh token also expired
+          this.logoutUser();
+          window.location.href = "/login";
+          return Promise.reject(e);
+        }
+      }
     );
   }
 
