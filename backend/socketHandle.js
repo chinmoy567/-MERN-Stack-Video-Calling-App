@@ -20,11 +20,16 @@ const SocketServer = async (socket, io) => {
   });
 
   socket.on("callToUser", (data) => {
+    if (!data || typeof data.callToUserId === "undefined" || !data.from || !data.signalData) {
+      console.warn("callToUser: invalid payload", data);
+      return;
+    }
+    const callToUserId = String(data.callToUserId);
     console.log(
-      `Incoming call from ${data.from} (${data.name}) to userId ${data.callToUserId}`
+      `Incoming call from ${data.from} (${data.name}) to userId ${callToUserId}`
     );
     const userSocketData = onlineUsers.find(
-      (user) => user.userId == data.callToUserId
+      (user) => user.userId === callToUserId
     );
     if (userSocketData) {
       io.to(userSocketData.socketId).emit("callToUser", {
@@ -50,17 +55,19 @@ const SocketServer = async (socket, io) => {
   // ─────────────────────────────────────────────────────────────────────────
 
   socket.on("cancelOutgoingCall", (data) => {
-    const peer = onlineUsers.find((u) => u.userId == data.toUserId);
+    if (!data || typeof data.toUserId === "undefined") return;
+    const peer = onlineUsers.find((u) => u.userId === String(data.toUserId));
     if (peer) {
       io.to(peer.socketId).emit("incomingCallCanceled");
     }
   });
 
   socket.on("endCall", (data) => {
+    if (!data) return;
     if (data.toSocketId) {
       io.to(data.toSocketId).emit("callEnded");
     } else if (data.toUserId != null && data.toUserId !== "") {
-      const peer = onlineUsers.find((u) => u.userId == data.toUserId);
+      const peer = onlineUsers.find((u) => u.userId === String(data.toUserId));
       if (peer) {
         io.to(peer.socketId).emit("callEnded");
       }

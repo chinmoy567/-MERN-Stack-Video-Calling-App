@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AuthService from "../../../services/AuthService";
 import socketInstance from "../../../socket"; // only one import needed
@@ -27,24 +27,25 @@ const Sidebar = ({callToUser ,isOpen, onlineUsers = [] }) => {
     setCurrentUserName(user ? user.name : "");
   }, []);
 
-  const handleLogout = () => {
-    // get the ACTUAL socket connection first
+  const handleLogout = useCallback(() => {
     const socket = socketInstance.getSocket();
-
     if (socket) {
-      socket.disconnect(); // properly disconnect socket
+      socket.disconnect();
     }
-
-    socketInstance.setSocket(); // set internal reference to null
-    AuthService.logoutUser();   // clear localStorage
+    socketInstance.setSocket();
+    AuthService.logoutUser();
     navigate("/login", { replace: true });
-  };
+  }, [navigate]);
 
-  const isUserOnline = (userId) => {
+  const onlineUserIds = useMemo(
+    () => new Set(onlineUsers.map((u) => u.userId)),
+    [onlineUsers]
+  );
 
-    
-    return onlineUsers.some((u) => u.userId === userId.toString());
-  };
+  const isUserOnline = useCallback(
+    (userId) => onlineUserIds.has(userId.toString()),
+    [onlineUserIds]
+  );
 
   return (
     <div

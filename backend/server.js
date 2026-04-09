@@ -14,10 +14,17 @@ const app = express();
 const port = process.env.SERVER_PORT;
 
 
+const allowedOrigin = process.env.CLIENT_URL || "http://localhost:5173";
+
 app.use(cors({
-  origin: "http://localhost:5173",
+  origin: allowedOrigin,
   credentials: true
 }));
+
+app.use((err, req, res, next) => {
+  console.error("Unhandled error:", err);
+  res.status(err.status || 500).json({ success: false, message: err.message || "Internal Server Error" });
+});
 
 
 //for views
@@ -56,9 +63,10 @@ server=app.listen(port, () => {
 
 
 const io = new Server(server, {
-    pingTimeout: 60000,
+    pingTimeout: 30000,
+    pingInterval: 10000,
     cors: {
-        origin: "http://localhost:5173",
+        origin: allowedOrigin,
         credentials: true
     }
 });
