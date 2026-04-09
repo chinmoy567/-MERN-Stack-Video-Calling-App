@@ -188,11 +188,17 @@ const Dashboard = () => {
 
   useEffect(() => {
     const myGen = ++mediaLoadGenRef.current;
+    let timerId;
 
     setMediaLoading(true);
     setMediaError(null);
 
-    (async () => {
+    // Defer with setTimeout(0) so StrictMode's synchronous cleanup can cancel
+    // the timer before getUserMedia is ever called — preventing two concurrent
+    // camera requests (which causes NotReadableError on Windows).
+    timerId = setTimeout(async () => {
+      if (myGen !== mediaLoadGenRef.current) return;
+
       try {
         const s = await acquireLocalMedia();
         if (myGen !== mediaLoadGenRef.current) {
@@ -208,9 +214,10 @@ const Dashboard = () => {
         setMediaLoading(false);
         setMediaError(formatMediaError(e));
       }
-    })();
+    }, 0);
 
     return () => {
+      clearTimeout(timerId);
       mediaLoadGenRef.current += 1;
       if (activeStreamRef.current) {
         activeStreamRef.current.getTracks().forEach((t) => t.stop());
