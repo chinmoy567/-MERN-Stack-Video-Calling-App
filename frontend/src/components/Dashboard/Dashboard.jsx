@@ -15,8 +15,8 @@ const ICE_SERVERS = {
 };
 
 // Per-attempt timeout so a hanging camera driver doesn't freeze the whole chain.
-// 8 s is enough for even a slow device; Chrome usually rejects bad constraints in < 2 s.
-const ATTEMPT_TIMEOUT_MS = 8000;
+// Use a larger value because some Windows cameras take longer to start.
+const ATTEMPT_TIMEOUT_MS = 20000;
 
 function gum(constraints) {
   return new Promise((resolve, reject) => {
@@ -34,7 +34,7 @@ function gum(constraints) {
 /**
  * Prefer microphone first, then add camera — avoids Chrome on Windows aborting with
  * "AbortError: Timeout starting video source" on the common first call { video:true, audio:true }.
- * Each getUserMedia call has its own 8 s timeout so a hung driver doesn't block indefinitely.
+ * Each getUserMedia call has its own timeout so a hung driver does not block indefinitely.
  */
 async function acquireLocalMedia() {
   const md = navigator.mediaDevices;
@@ -139,26 +139,6 @@ function formatMediaError(e) {
     return "No camera or microphone found. Plug in a device and click Retry below.";
   }
   return msg || "Could not access camera or microphone.";
-}
-
-const MEDIA_WAIT_MS = 20000;
-
-function withMediaTimeout(promise, ms) {
-  return new Promise((resolve, reject) => {
-    const t = setTimeout(() => {
-      reject(new DOMException("Camera or microphone did not respond in time.", "TimeoutError"));
-    }, ms);
-    promise.then(
-      (v) => {
-        clearTimeout(t);
-        resolve(v);
-      },
-      (e) => {
-        clearTimeout(t);
-        reject(e);
-      }
-    );
-  });
 }
 
 function createPeer(opts) {
@@ -278,7 +258,7 @@ const Dashboard = () => {
 
     (async () => {
       try {
-        const s = await withMediaTimeout(acquireLocalMedia(), MEDIA_WAIT_MS);
+        const s = await acquireLocalMedia();
         if (myGen !== mediaLoadGenRef.current) {
           s.getTracks().forEach((t) => t.stop());
           return;
