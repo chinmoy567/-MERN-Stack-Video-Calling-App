@@ -21,12 +21,6 @@ app.use(cors({
   credentials: true
 }));
 
-app.use((err, req, res, next) => {
-  console.error("Unhandled error:", err);
-  res.status(err.status || 500).json({ success: false, message: err.message || "Internal Server Error" });
-});
-
-
 //for views
 app.set("view engine", "ejs");
 app.set("views", "./views");
@@ -74,4 +68,10 @@ const io = new Server(server, {
 io.on("connection", (socket) => {
     console.log("Socket io connected Successfully!", socket.id);
     SocketServer(socket, io);
+});
+
+// Error handling middleware (must be after all routes)
+app.use((err, req, res, next) => {
+  console.error("Unhandled error:", err);
+  res.status(err.status || 500).json({ success: false, message: err.message || "Internal Server Error" });
 });
