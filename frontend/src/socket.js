@@ -1,7 +1,5 @@
 import { io } from "socket.io-client";
-
-/** Must match AuthService refresh dispatch event name */
-const ACCESS_TOKEN_UPDATED = "access-token-updated";
+import { ACCESS_TOKEN_UPDATED } from "./services/AuthService";
 
 let socket = null;
 let lastToken = null;

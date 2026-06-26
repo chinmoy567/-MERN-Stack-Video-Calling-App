@@ -78,7 +78,6 @@ exports.otpMailValidator = [
 ];
 // reset password submit (JSON)
 exports.resetPasswordSubmitValidator = [
-  check("user_id", "User Id is required").not().isEmpty(),
   check("token", "Token is required").not().isEmpty(),
   check("password", "Password is required").not().isEmpty(),
   check("password").isStrongPassword({

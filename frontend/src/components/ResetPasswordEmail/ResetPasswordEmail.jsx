@@ -9,8 +9,6 @@ const ResetPasswordEmail = () => {
 
   const [phase, setPhase] = useState("loading");
   const [errorMsg, setErrorMsg] = useState("");
-  const [userId, setUserId] = useState("");
-  const [resetToken, setResetToken] = useState("");
   const [password, setPassword] = useState("");
   const [cPassword, setCPassword] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
@@ -30,9 +28,7 @@ const ResetPasswordEmail = () => {
       try {
         const { data } = await AuthService.validateResetToken(token);
         if (cancelled) return;
-        if (data.success && data.data) {
-          setUserId(String(data.data.userId));
-          setResetToken(data.data.token);
+        if (data.success) {
           setPhase("form");
         } else {
           setPhase("error");
@@ -59,8 +55,7 @@ const ResetPasswordEmail = () => {
     setSubmitError("");
     try {
       const { data } = await AuthService.submitPasswordReset({
-        user_id: userId,
-        token: resetToken,
+        token,
         password,
         c_password: cPassword,
       });

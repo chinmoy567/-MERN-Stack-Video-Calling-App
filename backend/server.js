@@ -89,3 +89,12 @@ io.on("connection", (socket) => {
   console.log("Socket io connected Successfully!", socket.id);
   SocketServer(socket, io);
 });
+
+// Error handling middleware — must stay after all routes and socket setup
+app.use((err, req, res, _next) => {
+  console.error("Unhandled error:", err);
+  res.status(err.status || 500).json({
+    success: false,
+    message: err.message || "Internal server error",
+  });
+});

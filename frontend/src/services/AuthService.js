@@ -16,7 +16,9 @@ class AuthService {
   };
 
   constructor() {
-    this.axiosInstance = axios.create();
+    this._refreshPromise = null;
+
+    this.axiosInstance = axios.create({ timeout: 10000 });
     this.axiosInstance.interceptors.response.use(
       (response) => response,
       async (error) => {
@@ -25,8 +27,15 @@ class AuthService {
         if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
           originalRequest._retry = true;
 
+          // Deduplicate parallel refresh calls — reuse in-flight promise
+          if (!this._refreshPromise) {
+            this._refreshPromise = this.refreshToken().finally(() => {
+              this._refreshPromise = null;
+            });
+          }
+
           try {
-            await this.refreshToken();
+            await this._refreshPromise;
             const newAccessToken = localStorage.getItem("accessToken");
             originalRequest.headers["Authorization"] =
               "Bearer " + newAccessToken;

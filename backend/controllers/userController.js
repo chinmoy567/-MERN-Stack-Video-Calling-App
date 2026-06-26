@@ -274,10 +274,6 @@ const validateResetToken = async (req, res) => {
     return res.status(200).json({
       success: true,
       status: "valid",
-      data: {
-        userId: resetData.user_id,
-        token: resetData.token,
-      },
     });
   } catch (error) {
     return res.status(500).json({
@@ -300,7 +296,7 @@ const updatePassword = async (req, res) => {
       });
     }
 
-    const { user_id, password, c_password, token } = req.body;
+    const { password, c_password, token } = req.body;
     if (!token) {
       return res.status(400).json({
         success: false,
@@ -308,7 +304,7 @@ const updatePassword = async (req, res) => {
         message: "Invalid or expired reset link.",
       });
     }
-    const resetData = await PasswordReset.findOne({ user_id, token });
+    const resetData = await PasswordReset.findOne({ token });
     if (!resetData) {
       return res.status(400).json({
         success: false,
@@ -323,6 +319,7 @@ const updatePassword = async (req, res) => {
         message: "Confirm password does not match password.",
       });
     }
+    const user_id = resetData.user_id;
     const hashedPassword = await bcrypt.hash(c_password, 10);
     await User.findByIdAndUpdate(user_id, {
       $set: {
@@ -408,18 +405,21 @@ const loginUser = async (req, res) => {
 // userProfile controller
 const userProfile = async (req, res) => {
   try {
-  const userData = await User.findById(req.user.userId);
-  return res.status(200).json({
-    success: true,
-    msg: "User Profile Data!",
-    data: userData,
-  });
-    } catch (error) {
-      return res.status(400).json({
-        success: false,
-        msg: error.message,
-      });
+    const userData = await User.findById(req.user.userId);
+    if (!userData) {
+      return res.status(404).json({ success: false, msg: "User not found" });
     }
+    return res.status(200).json({
+      success: true,
+      msg: "User Profile Data!",
+      data: userData,
+    });
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      msg: error.message,
+    });
+  }
 };
 
 
