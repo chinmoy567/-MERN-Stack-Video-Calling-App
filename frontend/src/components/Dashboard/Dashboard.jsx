@@ -400,8 +400,7 @@ const Dashboard = () => {
     stream.getVideoTracks().length > 0 &&
     stream.getVideoTracks().some((t) => t.readyState !== "ended");
 
-  const callToUser = (userId, userName) => {
-    if (!joinId) return;
+  const callToUser = useCallback((userId, userName) => {
     if (!stream) {
       setCallNotice("Camera/microphone is not ready yet.");
       return;
@@ -447,7 +446,7 @@ const Dashboard = () => {
     connectionRef.current = peer;
     setCallInitiated(true);
     setCallingToName(userName || "User");
-  };
+  }, [socket, stream, me, userData, clearCallState]);
 
   const answerCall = () => {
     if (!joinId || !stream) return;

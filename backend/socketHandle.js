@@ -24,7 +24,7 @@ const SocketServer = async (socket, io) => {
   });
 
   socket.on("callToUser", (data) => {
-    if (!data?.callToUserId || !data.from || !data.signalData) {
+    if (!data || typeof data.callToUserId === "undefined" || !data.from || !data.signalData) {
       console.warn("callToUser: invalid payload", data);
       return;
     }
@@ -65,7 +65,7 @@ const SocketServer = async (socket, io) => {
   // ─────────────────────────────────────────────────────────────────────────
 
   socket.on("cancelOutgoingCall", (data) => {
-    if (!data?.toUserId) return;
+    if (!data || typeof data.toUserId === "undefined") return;
     const peer = onlineUsers.find((u) => u.userId === String(data.toUserId));
     if (peer) {
       io.to(peer.socketId).emit("incomingCallCanceled");
