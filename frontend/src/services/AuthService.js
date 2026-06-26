@@ -1,7 +1,8 @@
 import axios from "axios";
 
+export const ACCESS_TOKEN_UPDATED = "access-token-updated";
+
 class AuthService {
-  
   url = import.meta.env.VITE_API_URL;
   configMultipartData = {
     headers: {
@@ -14,7 +15,6 @@ class AuthService {
     },
   };
 
-  // Axios instance with interceptors
   constructor() {
     this._refreshPromise = null;
 
@@ -24,35 +24,33 @@ class AuthService {
       async (error) => {
         const originalRequest = error.config;
 
-        if (!error.response || error.response.status !== 401 || originalRequest._retry) {
-          return Promise.reject(error);
-        }
+        if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
+          originalRequest._retry = true;
 
-        originalRequest._retry = true;
+          // Deduplicate parallel refresh calls — reuse in-flight promise
+          if (!this._refreshPromise) {
+            this._refreshPromise = this.refreshToken().finally(() => {
+              this._refreshPromise = null;
+            });
+          }
 
-        // Prevent parallel refresh calls — reuse in-flight promise
-        if (!this._refreshPromise) {
-          this._refreshPromise = this.refreshToken().finally(() => {
-            this._refreshPromise = null;
-          });
+          try {
+            await this._refreshPromise;
+            const newAccessToken = localStorage.getItem("accessToken");
+            originalRequest.headers["Authorization"] =
+              "Bearer " + newAccessToken;
+            return this.axiosInstance(originalRequest);
+          } catch (e) {
+            this.logoutUser();
+            window.location.href = "/login";
+            return Promise.reject(e);
+          }
         }
-
-        try {
-          await this._refreshPromise;
-          const newAccessToken = localStorage.getItem("accessToken");
-          originalRequest.headers["Authorization"] = "Bearer " + newAccessToken;
-          return this.axiosInstance(originalRequest);
-        } catch (e) {
-          // refresh token also expired
-          this.logoutUser();
-          window.location.href = "/login";
-          return Promise.reject(e);
-        }
+        return Promise.reject(error);
       }
     );
   }
 
-  // Refresh token method
   async refreshToken() {
     const storedRefreshToken = localStorage.getItem("refreshToken");
     const authorizationHeader = {
@@ -70,9 +68,10 @@ class AuthService {
 
     localStorage.setItem("accessToken", accessToken);
     localStorage.setItem("refreshToken", refreshToken);
+
+    window.dispatchEvent(new Event(ACCESS_TOKEN_UPDATED));
   }
 
-  // Register method
   register(formData) {
     return axios.post(
       this.url + "register",
@@ -81,21 +80,22 @@ class AuthService {
     );
   }
 
-  // Login method
-  login(formData) {
-    return axios.post(this.url + "login", formData, this.configJsonData);
+  login(credentials) {
+    return axios.post(
+      this.url + "login",
+      credentials,
+      this.configJsonData
+    );
   }
 
-  // Store user data in local storage after login
   loginUser(data) {
-    localStorage.setItem("isLoggedIn", true);
+    localStorage.setItem("isLoggedIn", "true");
     localStorage.setItem("accessToken", data.accessToken);
     localStorage.setItem("refreshToken", data.refreshToken);
     localStorage.setItem("tokenType", data.tokenType);
     localStorage.setItem("user", JSON.stringify(data.user));
   }
 
-  // Logout method
   logoutUser() {
     localStorage.removeItem("isLoggedIn");
     localStorage.removeItem("accessToken");
@@ -103,30 +103,38 @@ class AuthService {
     localStorage.removeItem("tokenType");
     localStorage.removeItem("user");
   }
-  // Check if user is logged in
+
   isLoggedIn() {
-    return localStorage.getItem("isLoggedIn") === "true";
+    return (
+      localStorage.getItem("isLoggedIn") === "true" &&
+      !!localStorage.getItem("accessToken")
+    );
   }
 
-  // Get user data from local storage
   getUserData() {
-    return JSON.parse(localStorage.getItem("user"));
+    try {
+      const raw = localStorage.getItem("user");
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch {
+      return null;
+    }
   }
 
-  //forget password
-  forgotPassword(formData) {
-    return axios.post(  
+  forgotPassword(payload) {
+    return axios.post(
       this.url + "forgot-password",
-      formData,
+      payload,
       this.configJsonData
     );
   }
 
-  // Update user data
   updateUserData(formData) {
+    const token = localStorage.getItem("accessToken");
     const authorizationHeader = {
       headers: {
-        Authorization: "Bearer " + localStorage.getItem("accessToken"),
+        Authorization: token ? "Bearer " + token : "",
       },
     };
 
@@ -141,14 +149,35 @@ class AuthService {
     localStorage.setItem("user", JSON.stringify(userData));
   }
 
-getAllUsers() {
-  const authorizationHeader = {
-    headers: {
-      'Authorization': 'Bearer ' + localStorage.getItem('accessToken')
-    }
-  };
-  return this.axiosInstance.get(this.url + 'all-users', authorizationHeader);
+  getAllUsers() {
+    const token = localStorage.getItem("accessToken");
+    const authorizationHeader = {
+      headers: {
+        Authorization: token ? "Bearer " + token : "",
+      },
+    };
+    return this.axiosInstance.get(this.url + "all-users", authorizationHeader);
+  }
+
+  verifyEmail(token) {
+    return axios.get(
+      `${this.url}verify-email?token=${encodeURIComponent(token)}`
+    );
+  }
+
+  validateResetToken(token) {
+    return axios.get(
+      `${this.url}reset-password/validate?token=${encodeURIComponent(token)}`
+    );
+  }
+
+  submitPasswordReset(payload) {
+    return axios.post(
+      this.url + "reset-password",
+      payload,
+      this.configJsonData
+    );
+  }
 }
 
-}
 export default new AuthService();

@@ -16,13 +16,8 @@ const Login = () => {
       event.preventDefault();
       setErrors({});
       
-      const formData = new FormData();
-
-      formData.append("email", email);
-      formData.append("password", password);
-  
       try {
-        const response = await AuthService.login(formData);
+        const response = await AuthService.login({ email, password });
         const data = response.data;
         
         if (data.success) {

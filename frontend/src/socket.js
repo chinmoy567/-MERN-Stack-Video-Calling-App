@@ -1,28 +1,41 @@
-import { io } from 'socket.io-client';
+import { io } from "socket.io-client";
+import { ACCESS_TOKEN_UPDATED } from "./services/AuthService";
 
-let socket;
+let socket = null;
+let lastToken = null;
+
+const clearSocket = () => {
+  if (socket) {
+    socket.disconnect();
+  }
+  socket = null;
+  lastToken = null;
+};
+
+if (typeof window !== "undefined") {
+  window.addEventListener(ACCESS_TOKEN_UPDATED, clearSocket);
+}
 
 const getSocket = () => {
-  if (!socket || socket.disconnected) {
-    if (socket) {
-      socket.removeAllListeners();
-    }
+  const token = localStorage.getItem("accessToken");
+  if (!token) {
+    return null;
+  }
+  if (socket && lastToken !== token) {
+    clearSocket();
+  }
+  if (!socket) {
     socket = io(import.meta.env.VITE_API_BE_URL, {
-      reconnection: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      timeout: 20000,
+      auth: { token },
+      transports: ["websocket", "polling"],
     });
+    lastToken = token;
   }
   return socket;
 };
 
 const setSocket = () => {
-  if (socket) {
-    socket.removeAllListeners();
-    socket = null;
-  }
+  clearSocket();
 };
 
 export default {

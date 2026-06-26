@@ -25,9 +25,8 @@ const Register = () => {
     try {
       const response = await AuthService.register(formData);
       const data = response.data;
-      alert(data.msg);
       if (data.success) {
-        navigate("/login", { replace: true });
+        navigate("/register-success", { replace: true });
       }
     }
     catch (error) {

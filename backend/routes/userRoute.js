@@ -2,8 +2,20 @@
 const express = require('express');
 const path = require('path');
 const multer = require('multer');
+const rateLimit = require('express-rate-limit');
 const userRoute = express.Router();
 userRoute.use(express.json());
+
+const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 25 });
+const registerLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 15 });
+const forgotLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 8 });
+const otpLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 15 });
+const resetPasswordLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 
 // External modules
@@ -16,10 +28,11 @@ const {
   updateProfileValidator,
   otpMailValidator,
   verifyOtpValidator,
-  
+  resetPasswordSubmitValidator,
 } = require("../helpers/validation");
 
 const auth = require("../middleware/auth");
+const refreshAuth = require("../middleware/refreshAuth");
 
 
 
@@ -33,7 +46,8 @@ const storage = multer.diskStorage({
         }
     },
     filename: function(req, file, cb) {
-        const name = Date.now() + '-' + file.originalname;
+        const safe = path.basename(file.originalname).replace(/[^a-zA-Z0-9._-]/g, "_");
+        const name = Date.now() + "-" + safe;
         cb(null, name);
     }
 });
@@ -54,24 +68,35 @@ const upload = multer({
 // UserRoutes
 userRoute.post(
   "/register",
+  registerLimiter,
   upload.single("image"), 
   registerValidator, 
   userController.userRegister
 );
 
 userRoute.post("/send-mail-verification", sendMailVerificationValidator,userController.sendMailVerification);
-userRoute.post("/forgot-password",passwordResetValidator,userController.forgotPassword);
-userRoute.post("/login", loginValidator, userController.loginUser);
+userRoute.post("/forgot-password", forgotLimiter, passwordResetValidator,userController.forgotPassword);
+userRoute.post("/login", loginLimiter, loginValidator, userController.loginUser);
+
+// Email / reset flows — JSON only (React UI)
+userRoute.get("/verify-email", userController.verifyEmail);
+userRoute.get("/reset-password/validate", userController.validateResetToken);
+userRoute.post(
+  "/reset-password",
+  resetPasswordLimiter,
+  resetPasswordSubmitValidator,
+  userController.updatePassword
+);
 
 //authenticated route
 userRoute.get("/profile", auth, userController.userProfile);
 userRoute.post("/update-profile", auth,upload.single("image"), updateProfileValidator, userController.updateProfile);
-userRoute.get("/refresh-token", auth, userController.refreshToken);
+userRoute.get("/refresh-token", refreshAuth, userController.refreshToken);
 userRoute.post("/logout", auth, userController.logout);
 
 //otp verification routes
-userRoute.post("/send-otp", otpMailValidator, userController.sendOtp);
-userRoute.post("/verify-otp", verifyOtpValidator, userController.verifyOtp);
+userRoute.post("/send-otp", otpLimiter, otpMailValidator, userController.sendOtp);
+userRoute.post("/verify-otp", otpLimiter, verifyOtpValidator, userController.verifyOtp);
 userRoute.get ('/all-users',auth, userController.getAllUsers);
 
 module.exports = userRoute;

@@ -17,6 +17,7 @@ const userSchema = new mongoose.Schema({
   password: {
     type: String,
     required: true,
+    select: false,
   },
   is_verified: {
     type: Number,
@@ -25,6 +26,20 @@ const userSchema = new mongoose.Schema({
   image: {
     type: String,
     required: true,
+  },
+});
+
+userSchema.set("toJSON", {
+  transform(_doc, ret) {
+    delete ret.password;
+    return ret;
+  },
+});
+
+userSchema.set("toObject", {
+  transform(_doc, ret) {
+    delete ret.password;
+    return ret;
   },
 });
 
