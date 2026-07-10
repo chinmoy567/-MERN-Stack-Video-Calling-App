@@ -5,6 +5,7 @@ import {
   Routes,
 } from "react-router-dom";
 import Dashboard from "./components/Dashboard/Dashboard";
+import Profile from "./components/Profile/Profile";
 import ForgotPassword from "./components/ForgotPassword/ForgotPassword";
 import Login from "./components/Login/Login";
 import Register from "./components/Register/Register";
@@ -64,6 +65,11 @@ function App() {
         <Route
           path="/dashboard"
           element={<ProtectedRoute element={<Dashboard />} />}
+        />
+
+        <Route
+          path="/profile"
+          element={<ProtectedRoute element={<Profile />} />}
         />
 
         <Route path="*" element={<NotFound />} />

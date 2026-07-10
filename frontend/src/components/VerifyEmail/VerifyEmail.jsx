@@ -5,15 +5,13 @@ import AuthService from "../../services/AuthService";
 const VerifyEmail = () => {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token");
-  const [status, setStatus] = useState("loading");
-  const [message, setMessage] = useState("");
+  const [status, setStatus] = useState(token ? "loading" : "error");
+  const [message, setMessage] = useState(
+    token ? "" : "Missing verification token in the link."
+  );
 
   useEffect(() => {
-    if (!token) {
-      setStatus("error");
-      setMessage("Missing verification token in the link.");
-      return;
-    }
+    if (!token) return;
 
     let cancelled = false;
     (async () => {

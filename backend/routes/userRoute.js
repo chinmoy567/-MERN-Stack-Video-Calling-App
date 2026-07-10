@@ -31,6 +31,8 @@ const {
   resetPasswordSubmitValidator,
 } = require("../helpers/validation");
 
+const messageController = require("../controllers/messageController");
+
 const auth = require("../middleware/auth");
 const refreshAuth = require("../middleware/refreshAuth");
 
@@ -98,6 +100,10 @@ userRoute.post("/logout", auth, userController.logout);
 userRoute.post("/send-otp", otpLimiter, otpMailValidator, userController.sendOtp);
 userRoute.post("/verify-otp", otpLimiter, verifyOtpValidator, userController.verifyOtp);
 userRoute.get ('/all-users',auth, userController.getAllUsers);
+
+// messaging routes
+userRoute.get("/conversations", auth, messageController.getConversations);
+userRoute.get("/messages/:userId", auth, messageController.getMessages);
 
 module.exports = userRoute;
 

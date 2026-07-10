@@ -1,3 +1,5 @@
+const Message = require("./models/messageModel");
+
 let onlineUsers = [];
 
 const SocketServer = async (socket, io) => {
@@ -83,6 +85,60 @@ const SocketServer = async (socket, io) => {
       }
     }
   });
+
+  // ── Chat messaging ───────────────────────────────────────────────────────
+  socket.on("send-message", async (data, ack) => {
+    try {
+      const from = socket.userId;
+      const to = data && data.to != null ? String(data.to) : "";
+      const text = data && typeof data.text === "string" ? data.text.trim() : "";
+
+      if (!to || !text) {
+        if (typeof ack === "function") ack({ ok: false, error: "invalid" });
+        return;
+      }
+
+      const saved = await Message.create({
+        sender: from,
+        receiver: to,
+        text: text.slice(0, 2000),
+      });
+
+      const payload = {
+        _id: String(saved._id),
+        sender: from,
+        receiver: to,
+        text: saved.text,
+        read: false,
+        createdAt: saved.createdAt,
+      };
+
+      // Deliver live to the receiver if they are online.
+      const receiver = onlineUsers.find((u) => u.userId === to);
+      if (receiver) {
+        io.to(receiver.socketId).emit("receive-message", payload);
+      }
+
+      // Acknowledge to the sender with the persisted message.
+      if (typeof ack === "function") ack({ ok: true, message: payload });
+    } catch (err) {
+      console.error("send-message error:", err.message);
+      if (typeof ack === "function") ack({ ok: false, error: "server" });
+    }
+  });
+
+  socket.on("typing", (data) => {
+    const to = data && data.to != null ? String(data.to) : "";
+    if (!to) return;
+    const receiver = onlineUsers.find((u) => u.userId === to);
+    if (receiver) {
+      io.to(receiver.socketId).emit("typing", {
+        from: socket.userId,
+        isTyping: !!(data && data.isTyping),
+      });
+    }
+  });
+  // ─────────────────────────────────────────────────────────────────────────
 
   socket.on("disconnect", () => {
     onlineUsers = onlineUsers.filter((user) => user.socketId !== socket.id);

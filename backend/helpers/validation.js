@@ -25,17 +25,18 @@ exports.registerValidator = [
     minUppercase: 1,
     minLowercase: 1,
     minNumbers: 1,
+    minSymbols: 0,
   }),
   check("image")
     .custom((value, { req }) => {
-      if (
+      // Profile image is optional. When provided, it must be JPEG or PNG.
+      if (!req.file) {
+        return true;
+      }
+      return (
         req.file.mimetype === "image/jpeg" ||
         req.file.mimetype === "image/png"
-      ) {
-        return true;
-      } else {
-        return false;
-      }
+      );
     })
     .withMessage("Please upload an image Jpeg, PNG"),
 ];

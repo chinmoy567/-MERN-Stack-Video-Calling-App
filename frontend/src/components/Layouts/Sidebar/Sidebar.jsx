@@ -1,126 +1,134 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { MdLogout } from "react-icons/md";
 import AuthService from "../../../services/AuthService";
 import socketInstance from "../../../socket";
 
-const Sidebar = ({ callToUser, isOpen, onlineUsers = [] }) => {
-  const [currentUserName, setCurrentUserName] = useState("");
+const BE_URL = import.meta.env.VITE_API_BE_URL;
+
+const Sidebar = ({
+  users = [],
+  onlineUsers = [],
+  conversations = [],
+  selectedId,
+  onSelect,
+  listError,
+}) => {
   const navigate = useNavigate();
-  const [users, setUsers] = useState([]);
-  const [listError, setListError] = useState(null);
+  const currentUser = AuthService.getUserData();
 
-  useEffect(() => {
-    const fetchUsers = async () => {
-      setListError(null);
-      try {
-        const response = await AuthService.getAllUsers();
-        const data = response.data;
-        if (data.success) {
-          setUsers(data.data || []);
-        }
-      } catch (error) {
-        console.log(error);
-        const msg =
-          error.response?.data?.msg ||
-          error.message ||
-          "Could not load contacts.";
-        setListError(msg);
-      }
-    };
+  const onlineIds = new Set(onlineUsers.map((u) => u.userId));
+  const isOnline = (id) => onlineIds.has(String(id));
 
-    fetchUsers();
+  const convById = new Map(
+    conversations.map((c) => [String(c.userId), c])
+  );
 
-    const user = AuthService.getUserData();
-    setCurrentUserName(user ? user.name : "");
-  }, []);
-
-  const handleLogout = useCallback(() => {
+  const handleLogout = () => {
     const socket = socketInstance.getSocket();
-    if (socket) {
-      socket.disconnect();
-    }
+    if (socket) socket.disconnect();
     socketInstance.setSocket();
     AuthService.logoutUser();
     navigate("/login", { replace: true });
-  }, [navigate]);
+  };
 
-  const onlineUserIds = useMemo(
-    () => new Set(onlineUsers.map((u) => u.userId)),
-    [onlineUsers]
-  );
-
-  const isUserOnline = useCallback(
-    (userId) => onlineUserIds.has(userId.toString()),
-    [onlineUserIds]
-  );
+  // Sort: contacts with conversations first (most recent), then the rest.
+  const sorted = [...users].sort((a, b) => {
+    const ca = convById.get(String(a._id));
+    const cb = convById.get(String(b._id));
+    if (ca && cb)
+      return new Date(cb.lastMessageAt) - new Date(ca.lastMessageAt);
+    if (ca) return -1;
+    if (cb) return 1;
+    return (a.name || "").localeCompare(b.name || "");
+  });
 
   return (
-    <div
-      className={`fixed top-0 left-0 w-64 h-screen bg-gray-900 text-white 
-      transform transition-transform duration-300 z-40
-      ${isOpen ? "translate-x-0" : "-translate-x-full"}`}
-    >
-      <div className="bg-blue-200 px-4 py-4 font-semibold text-lg text-black">
-        Video Calling
-      </div>
-      <div className="bg-blue-200 px-4 py-4">
+    <div className="flex h-full w-full flex-col bg-slate-900 text-white">
+      {/* Current user header */}
+      <button
+        type="button"
+        onClick={() => navigate("/profile")}
+        className="flex items-center gap-3 border-b border-slate-700 px-4 py-4 text-left hover:bg-slate-800 transition"
+      >
+        {currentUser?.image && (
+          <img
+            src={`${BE_URL}${currentUser.image}`}
+            alt={currentUser.name}
+            className="h-10 w-10 rounded-full object-cover border border-slate-600"
+          />
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-semibold">{currentUser?.name}</p>
+          <p className="text-xs text-slate-400">View profile</p>
+        </div>
+      </button>
+
+      <div className="flex items-center justify-between px-4 py-3">
+        <span className="text-sm font-semibold text-slate-300">Chats</span>
         <button
-          className="bg-red-500 text-white px-3 py-1 rounded"
+          type="button"
           onClick={handleLogout}
+          className="flex items-center gap-1 rounded bg-red-600 px-3 py-1 text-xs font-medium hover:bg-red-500 transition"
         >
-          Log Out
+          <MdLogout size={14} /> Log out
         </button>
       </div>
 
-      <div className="px-4 py-2 text-sm text-gray-300">
-        Hi, {currentUserName}
-      </div>
-
       {listError && (
-        <div className="px-4 py-2 text-xs text-red-300 border-b border-gray-700">
-          {listError}
-        </div>
+        <div className="px-4 py-2 text-xs text-red-300">{listError}</div>
       )}
 
-      {!listError && users.length === 0 && (
-        <div className="px-4 py-3 text-sm text-gray-500">No other users yet.</div>
-      )}
-
-      <ul className="mb-5">
-        {users.map((user) => (
-          <li
-            key={user._id}
-            onClick={() => callToUser(user._id, user.name)}
-            className="flex items-center gap-4 px-4 py-3 rounded-lg hover:bg-gray-700 cursor-pointer transition"
-          >
-            <div className="relative">
-              <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white">
-                <img
-                  src={`${import.meta.env.VITE_API_BE_URL}${user.image}`}
-                  alt={user.name}
-                  className="w-full h-full object-cover object-center"
-                />
-              </div>
-              <span
-                className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-gray-900
-                  ${isUserOnline(user._id) ? "bg-green-400" : "bg-gray-500"}`}
-              />
-            </div>
-
-            <div className="flex flex-col">
-              <span className="text-white font-medium text-sm">
-                {user.name}
-              </span>
-              <span
-                className={`text-xs font-semibold
-                  ${isUserOnline(user._id) ? "text-green-400" : "text-gray-400"}`}
-              >
-                {isUserOnline(user._id) ? "● Online" : "○ Offline"}
-              </span>
-            </div>
-          </li>
-        ))}
-      </ul>
+      <div className="flex-1 overflow-y-auto">
+        {!listError && sorted.length === 0 && (
+          <p className="px-4 py-3 text-sm text-slate-500">No other users yet.</p>
+        )}
+        <ul>
+          {sorted.map((user) => {
+            const conv = convById.get(String(user._id));
+            const active = String(selectedId) === String(user._id);
+            return (
+              <li key={user._id}>
+                <button
+                  type="button"
+                  onClick={() => onSelect(user)}
+                  className={`flex w-full items-center gap-3 px-4 py-3 text-left transition ${
+                    active ? "bg-slate-700" : "hover:bg-slate-800"
+                  }`}
+                >
+                  <div className="relative shrink-0">
+                    <img
+                      src={`${BE_URL}${user.image}`}
+                      alt={user.name}
+                      className="h-11 w-11 rounded-full object-cover border border-slate-600"
+                    />
+                    <span
+                      className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-slate-900 ${
+                        isOnline(user._id) ? "bg-green-400" : "bg-slate-500"
+                      }`}
+                    />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate font-medium text-sm">
+                        {user.name}
+                      </span>
+                      {conv?.unread > 0 && !active && (
+                        <span className="ml-1 shrink-0 rounded-full bg-green-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                          {conv.unread}
+                        </span>
+                      )}
+                    </div>
+                    <p className="truncate text-xs text-slate-400">
+                      {conv?.lastMessage ||
+                        (isOnline(user._id) ? "Online" : "Offline")}
+                    </p>
+                  </div>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
     </div>
   );
 };

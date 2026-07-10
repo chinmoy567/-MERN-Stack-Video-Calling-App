@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Navigate } from "react-router-dom";
-import Layout from "../Layouts/Layout/Layout";
 import socketInstance from "../../socket";
 import AuthService, { ACCESS_TOKEN_UPDATED } from "../../services/AuthService";
 import Peer from "simple-peer";
 import Calling from "../Calling/Calling";
+import Sidebar from "../Layouts/Sidebar/Sidebar";
+import ChatWindow from "../Chat/ChatWindow";
 import { MdCallEnd } from "react-icons/md";
 
 const ICE_SERVERS = {
@@ -14,8 +15,6 @@ const ICE_SERVERS = {
   ],
 };
 
-// Per-attempt timeout so a hanging camera driver doesn't freeze the whole chain.
-// Use a larger value because some Windows cameras take longer to start.
 const ATTEMPT_TIMEOUT_MS = 20000;
 
 function gum(constraints) {
@@ -25,26 +24,33 @@ function gum(constraints) {
       ATTEMPT_TIMEOUT_MS
     );
     navigator.mediaDevices.getUserMedia(constraints).then(
-      (s) => { clearTimeout(t); resolve(s); },
-      (e) => { clearTimeout(t); reject(e); }
+      (s) => {
+        clearTimeout(t);
+        resolve(s);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      }
     );
   });
 }
 
-/**
- * Prefer microphone first, then add camera — avoids Chrome on Windows aborting with
- * "AbortError: Timeout starting video source" on the common first call { video:true, audio:true }.
- * Each getUserMedia call has its own timeout so a hung driver does not block indefinitely.
- */
 async function acquireLocalMedia() {
   const md = navigator.mediaDevices;
   if (!md?.getUserMedia) {
-    throw new DOMException("Use HTTPS or localhost for camera/microphone.", "NotSupportedError");
+    throw new DOMException(
+      "Use HTTPS or localhost for camera/microphone.",
+      "NotSupportedError"
+    );
   }
 
   const mergeVideoInto = async (aStream, videoConstraints) => {
     const vStream = await gum(videoConstraints);
-    return new MediaStream([...aStream.getAudioTracks(), ...vStream.getVideoTracks()]);
+    return new MediaStream([
+      ...aStream.getAudioTracks(),
+      ...vStream.getVideoTracks(),
+    ]);
   };
 
   let audioStream = null;
@@ -61,10 +67,7 @@ async function acquireLocalMedia() {
         video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { max: 30 } },
         audio: false,
       },
-      {
-        video: { width: { ideal: 320 }, height: { ideal: 240 } },
-        audio: false,
-      },
+      { video: { width: { ideal: 320 }, height: { ideal: 240 } }, audio: false },
       { video: { frameRate: { max: 15 } }, audio: false },
     ];
 
@@ -86,18 +89,16 @@ async function acquireLocalMedia() {
             audio: false,
           });
         } catch (e) {
-          console.warn("split merge deviceId failed:", cam.label, e?.name, e?.message);
+          console.warn("split merge deviceId failed:", cam.label, e?.name);
         }
       }
     } catch (e) {
       console.warn("enumerateDevices:", e);
     }
 
-    // All video attempts failed — return audio-only so voice calls still work
     return audioStream;
   }
 
-  // No audio stream — try combined fallbacks
   for (const constraints of [
     { video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { max: 24 } }, audio: true },
     { video: { width: { ideal: 320 }, height: { ideal: 240 } }, audio: true },
@@ -108,7 +109,7 @@ async function acquireLocalMedia() {
     try {
       return await gum(constraints);
     } catch (e) {
-      console.warn("getUserMedia fallback failed:", JSON.stringify(constraints), e?.name, e?.message);
+      console.warn("getUserMedia fallback failed:", e?.name, e?.message);
     }
   }
 
@@ -124,19 +125,19 @@ function formatMediaError(e) {
     e?.name === "NotReadableError" ||
     /could not start video|in use|busy|being used|another application/i.test(msg)
   ) {
-    return "Your webcam can only be used by one app at a time on Windows. Hang up or fully close WhatsApp video, Zoom, Teams, or the Windows Camera app, then click Retry below.";
+    return "Your webcam can only be used by one app at a time. Close other video apps (Zoom, Teams, WhatsApp), then Retry.";
   }
   if (e?.name === "AbortError" || /Timeout starting video/i.test(msg)) {
     return "The camera did not start in time — often because another app is using it. Close other video apps, then Retry.";
   }
   if (e?.name === "NotSupportedError" || /HTTPS|secure/i.test(msg)) {
-    return "Camera and microphone need a secure context. Use https:// in production or http://localhost for development.";
+    return "Camera and microphone need a secure context (https or localhost).";
   }
   if (e?.name === "TimeoutError") {
-    return "No response from camera or microphone in time. Make sure no other app (Zoom, Teams, WhatsApp) is using the camera, then click Retry below.";
+    return "No response from camera or microphone in time. Close other video apps, then Retry.";
   }
   if (e?.name === "NotFoundError") {
-    return "No camera or microphone found. Plug in a device and click Retry below.";
+    return "No camera or microphone found. Plug in a device and Retry.";
   }
   return msg || "Could not access camera or microphone.";
 }
@@ -152,14 +153,17 @@ function createPeer(opts) {
 
 const Dashboard = () => {
   const user = AuthService.getUserData();
-  // Stable primitives for effect deps — getUserData() returns a new object every render (JSON.parse),
-  // so putting that object in useEffect deps caused an infinite re-render loop.
   const joinId = user?._id != null ? String(user._id) : null;
   const joinName = user?.name ?? "";
 
   const [socketKey, setSocketKey] = useState(0);
 
+  const [users, setUsers] = useState([]);
+  const [conversations, setConversations] = useState([]);
   const [onlineUsers, setOnlineUsers] = useState([]);
+  const [listError, setListError] = useState(null);
+  const [selectedContact, setSelectedContact] = useState(null);
+
   const [stream, setStream] = useState(null);
   const [me, setMe] = useState("");
 
@@ -168,14 +172,11 @@ const Dashboard = () => {
   const [callerName, setCallerName] = useState("");
   const [callerSignal, setCallerSignal] = useState(null);
   const [callAccepted, setCallAccepted] = useState(false);
-
   const [callInitiated, setCallInitiated] = useState(false);
   const [callingToName, setCallingToName] = useState("");
-
   const [callNotice, setCallNotice] = useState(null);
   const [socketError, setSocketError] = useState(null);
 
-  /** Browsers often block or never show the permission prompt unless getUserMedia runs from a click. */
   const [mediaStarted, setMediaStarted] = useState(false);
   const [mediaLoading, setMediaLoading] = useState(false);
   const [mediaError, setMediaError] = useState(null);
@@ -188,6 +189,7 @@ const Dashboard = () => {
   const mediaLoadGenRef = useRef(0);
   const callingToNameRef = useRef("");
   const outgoingPeerUserIdRef = useRef(null);
+  const pendingCallRef = useRef(null); // {userId, userName} — call requested before media ready
 
   const receivingCallRef = useRef(false);
   const callInitiatedRef = useRef(false);
@@ -202,6 +204,9 @@ const Dashboard = () => {
   useEffect(() => {
     callAcceptedRef.current = callAccepted;
   }, [callAccepted]);
+  useEffect(() => {
+    callingToNameRef.current = callingToName;
+  }, [callingToName]);
 
   useEffect(() => {
     const onTokenRefresh = () => setSocketKey((k) => k + 1);
@@ -210,20 +215,42 @@ const Dashboard = () => {
   }, []);
 
   useEffect(() => {
-    callingToNameRef.current = callingToName;
-  }, [callingToName]);
-
-  useEffect(() => {
     if (!callNotice) return;
     const t = setTimeout(() => setCallNotice(null), 6000);
     return () => clearTimeout(t);
   }, [callNotice]);
 
+  // Load contacts + conversation previews.
+  const loadConversations = useCallback(() => {
+    AuthService.getConversations()
+      .then((res) => setConversations(res.data?.data || []))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    AuthService.getAllUsers()
+      .then((res) => {
+        if (cancelled) return;
+        if (res.data?.success) setUsers(res.data.data || []);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setListError(
+          e.response?.data?.msg || e.message || "Could not load contacts."
+        );
+      });
+    loadConversations();
+    return () => {
+      cancelled = true;
+    };
+  }, [loadConversations]);
+
   const clearCallState = useCallback(() => {
     if (connectionRef.current) {
       try {
         connectionRef.current.destroy();
-      } catch (_) {
+      } catch {
         /* noop */
       }
       connectionRef.current = null;
@@ -244,15 +271,13 @@ const Dashboard = () => {
     if (!el || !stream) return;
     if (el.srcObject !== stream) el.srcObject = stream;
     el.play().catch(() => {});
-  }, [stream]);
+  }, [stream, callAccepted, callInitiated, receivingCall]);
 
+  // Acquire media when started/retried.
   useEffect(() => {
-    if (!mediaStarted) {
-      return undefined;
-    }
-
+    if (!mediaStarted) return undefined;
     const myGen = ++mediaLoadGenRef.current;
-
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMediaLoading(true);
     setMediaError(null);
 
@@ -292,28 +317,69 @@ const Dashboard = () => {
       callAcceptedRef.current
     );
 
+  const startOutgoingCall = useCallback(
+    (userId, userName, activeStream) => {
+      outgoingPeerUserIdRef.current = userId;
+      const peer = createPeer({ initiator: true, stream: activeStream });
+
+      peer.on("signal", (data) => {
+        const sock = socketInstance.getSocket();
+        if (!sock) return;
+        sock.emit("callToUser", {
+          callToUserId: userId,
+          signalData: data,
+          from: me,
+          name: joinName,
+        });
+      });
+      peer.on("stream", (remoteStream) => {
+        if (userVideo.current) userVideo.current.srcObject = remoteStream;
+      });
+      peer.on("error", (err) => {
+        console.error("Peer error (outgoing):", err);
+        setCallNotice("Connection error — try again.");
+        clearCallState();
+      });
+      peer.on("close", () => clearCallState());
+
+      connectionRef.current = peer;
+      setCallInitiated(true);
+      setCallingToName(userName || "User");
+    },
+    [me, joinName, clearCallState]
+  );
+
+  // When media becomes ready and a call was queued, start it.
+  useEffect(() => {
+    if (stream && pendingCallRef.current) {
+      const { userId, userName } = pendingCallRef.current;
+      pendingCallRef.current = null;
+      if (me) startOutgoingCall(userId, userName, stream);
+    }
+  }, [stream, me, startOutgoingCall]);
+
+  // Socket wiring for calls + presence.
   useEffect(() => {
     if (!joinId) return;
-
     const s = socketInstance.getSocket();
     if (!s) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSocketError("Not connected — sign in again.");
       return;
     }
-
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSocketError(null);
 
     const onConnectError = (err) => {
       console.warn("Socket connect_error:", err?.message);
       setSocketError(
-        "Real-time connection failed. Try refreshing the page. If you were idle a long time, sign out and sign in again."
+        "Real-time connection failed. Try refreshing the page or sign out and in again."
       );
     };
 
     s.on("connect_error", onConnectError);
-
     s.on("me", (id) => setMe(id));
-    s.on("get-online-users", (users) => setOnlineUsers(users));
+    s.on("get-online-users", (u) => setOnlineUsers(u));
 
     s.on("callToUser", (data) => {
       if (isInCallFlow()) {
@@ -348,7 +414,7 @@ const Dashboard = () => {
       if (connectionRef.current) {
         try {
           connectionRef.current.destroy();
-        } catch (_) {
+        } catch {
           /* noop */
         }
         connectionRef.current = null;
@@ -356,11 +422,11 @@ const Dashboard = () => {
       setCallInitiated(false);
       setCallingToName("");
       outgoingPeerUserIdRef.current = null;
-      if (payload?.reason === "busy") {
-        setCallNotice("That user is on another call.");
-      } else {
-        setCallNotice("That user is offline or unavailable.");
-      }
+      setCallNotice(
+        payload?.reason === "busy"
+          ? "That user is on another call."
+          : "That user is offline or unavailable."
+      );
     });
 
     s.on("incomingCallCanceled", () => {
@@ -376,8 +442,11 @@ const Dashboard = () => {
       setCallNotice("The call ended.");
     });
 
-    const sendJoin = () => s.emit("join", { id: joinId, name: joinName });
+    // Refresh conversation previews when any message arrives.
+    const onAnyMessage = () => loadConversations();
+    s.on("receive-message", onAnyMessage);
 
+    const sendJoin = () => s.emit("join", { id: joinId, name: joinName });
     if (s.connected) sendJoin();
     else s.once("connect", sendJoin);
 
@@ -391,90 +460,67 @@ const Dashboard = () => {
       s.off("callFailed");
       s.off("incomingCallCanceled");
       s.off("callEnded");
+      s.off("receive-message", onAnyMessage);
       s.off("connect", sendJoin);
     };
-  }, [socketKey, joinId, joinName, clearCallState]);
+  }, [socketKey, joinId, joinName, clearCallState, loadConversations]);
 
   const hasVideoTrack =
     stream &&
     stream.getVideoTracks().length > 0 &&
     stream.getVideoTracks().some((t) => t.readyState !== "ended");
 
-  const callToUser = useCallback((userId, userName) => {
-    if (!stream) {
-      setCallNotice("Camera/microphone is not ready yet.");
-      return;
-    }
-    if (!me) {
-      setCallNotice("Connecting to server — try again in a moment.");
-      return;
-    }
-    if (isInCallFlow()) {
-      setCallNotice("Finish your current call before starting another.");
-      return;
-    }
-
-    outgoingPeerUserIdRef.current = userId;
-
-    const peer = createPeer({ initiator: true, stream });
-
-    peer.on("signal", (data) => {
-      const sock = socketInstance.getSocket();
-      if (!sock) return;
-      sock.emit("callToUser", {
-        callToUserId: userId,
-        signalData: data,
-        from: me,
-        name: joinName,
-      });
-    });
-
-    peer.on("stream", (remoteStream) => {
-      if (userVideo.current) userVideo.current.srcObject = remoteStream;
-    });
-
-    peer.on("error", (err) => {
-      console.error("Peer error (outgoing):", err);
-      setCallNotice("Connection error — try again.");
-      clearCallState();
-    });
-
-    peer.on("close", () => {
-      clearCallState();
-    });
-
-    connectionRef.current = peer;
-    setCallInitiated(true);
-    setCallingToName(userName || "User");
-  }, [socket, stream, me, userData, clearCallState]);
+  // Called from chat header / sidebar. Ensures media is running first.
+  const callToUser = useCallback(
+    (userId, userName) => {
+      if (!me) {
+        setCallNotice("Connecting to server — try again in a moment.");
+        return;
+      }
+      if (isInCallFlow()) {
+        setCallNotice("Finish your current call before starting another.");
+        return;
+      }
+      if (stream) {
+        startOutgoingCall(userId, userName, stream);
+      } else {
+        // Queue the call and start media (browsers need a user gesture — this is one).
+        pendingCallRef.current = { userId, userName };
+        setCallingToName(userName || "User");
+        setCallInitiated(true);
+        setMediaError(null);
+        setMediaStarted(true);
+      }
+    },
+    [me, stream, startOutgoingCall]
+  );
 
   const answerCall = () => {
-    if (!joinId || !stream) return;
+    if (!joinId) return;
+    if (!stream) {
+      // Start media, then this function is effectively retried by the user.
+      setMediaStarted(true);
+      setCallNotice("Starting camera… tap Answer again once the preview appears.");
+      return;
+    }
     setCallAccepted(true);
     setReceivingCall(false);
 
     const peer = createPeer({ initiator: false, stream });
-
     peer.on("signal", (data) => {
       const sock = socketInstance.getSocket();
       if (!sock) return;
       sock.emit("answerCall", { signal: data, to: caller });
     });
-
     peer.on("stream", (remoteStream) => {
       if (userVideo.current) userVideo.current.srcObject = remoteStream;
     });
-
     peer.on("error", (err) => {
       console.error("Peer error (answer):", err);
       setCallNotice("Connection error — try again.");
       clearCallState();
     });
-
-    peer.on("close", () => {
-      clearCallState();
-    });
-
+    peer.on("close", () => clearCallState());
     peer.signal(callerSignal);
     connectionRef.current = peer;
   };
@@ -496,11 +542,12 @@ const Dashboard = () => {
     if (connectionRef.current) {
       try {
         connectionRef.current.destroy();
-      } catch (_) {
+      } catch {
         /* noop */
       }
       connectionRef.current = null;
     }
+    pendingCallRef.current = null;
     setCallInitiated(false);
     setCallingToName("");
     outgoingPeerUserIdRef.current = null;
@@ -519,170 +566,153 @@ const Dashboard = () => {
     setCallNotice("You ended the call.");
   };
 
-  if (!joinId) {
-    return <Navigate to="/login" replace />;
-  }
-
-  const startMedia = () => {
-    setMediaError(null);
-    setMediaStarted(true);
-  };
-
   const retryMedia = () => {
     setMediaError(null);
     setMediaStarted(true);
     setMediaRetryKey((k) => k + 1);
   };
 
+  if (!joinId) return <Navigate to="/login" replace />;
+
+  const callActive = callAccepted || callInitiated || receivingCall;
+
   return (
-    <Layout onlineUsers={onlineUsers} callToUser={callToUser}>
-      <h2 className="text-xl text-gray-700 bg-white p-4 rounded shadow mb-4">
-        Welcome to Dashboard
-      </h2>
+    <div className="flex h-screen w-screen overflow-hidden bg-slate-100">
+      {/* Sidebar */}
+      <aside className="w-80 shrink-0 border-r border-slate-800">
+        <Sidebar
+          users={users}
+          onlineUsers={onlineUsers}
+          conversations={conversations}
+          selectedId={selectedContact?._id}
+          onSelect={setSelectedContact}
+          listError={listError}
+        />
+      </aside>
 
-      {socketError && (
-        <div
-          className="mb-4 px-4 py-3 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 text-sm"
-          role="alert"
-        >
-          {socketError}
-        </div>
-      )}
-
-      {callNotice && (
-        <div
-          className="mb-4 px-4 py-3 rounded-lg border border-slate-200 bg-slate-50 text-slate-800 text-sm"
-          role="status"
-        >
-          {callNotice}
-        </div>
-      )}
-
-      {!mediaStarted && (
-        <div className="mb-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-slate-800 text-sm mb-3">
-            <strong>Enable your camera and microphone.</strong> Chrome often will not show a permission prompt until you
-            click a button on this page (a security rule). Use the button below, then choose{" "}
-            <strong>Allow</strong> when asked.
-          </p>
-          <button
-            type="button"
-            onClick={startMedia}
-            className="w-full sm:w-auto rounded-lg bg-blue-600 px-6 py-3 text-white font-semibold shadow hover:bg-blue-700 transition"
-          >
-            Start camera &amp; microphone
-          </button>
-        </div>
-      )}
-
-      {mediaStarted && mediaLoading && (
-        <p className="text-sm text-blue-800 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 mb-4">
-          <strong>Camera permission:</strong> if Chrome shows a prompt for localhost, choose{" "}
-          <strong>Allow while visiting the site</strong> (or <strong>Allow this time</strong>). The preview can stay
-          black until you allow — that is normal.
-        </p>
-      )}
-
-      {mediaError && (
-        <div className="mb-4 space-y-2">
-          <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-3">{mediaError}</p>
-          <button
-            type="button"
-            onClick={retryMedia}
-            className="text-sm font-medium text-blue-600 hover:text-blue-800 underline"
-          >
-            Retry camera &amp; microphone
-          </button>
-        </div>
-      )}
-
-      <div className="flex flex-wrap gap-4">
-        <div className="flex flex-col items-center">
-          <h4 className="text-gray-700 font-semibold mb-2">Your Camera</h4>
-          <div className="w-72 h-48 bg-black rounded-lg overflow-hidden border-2 border-blue-500">
-            <video ref={myVideo} autoPlay playsInline muted className="w-full h-full object-cover" />
-          </div>
-          {!mediaError && stream && !hasVideoTrack && (
-            <div className="mt-2 max-w-72 text-center space-y-2">
-              <p className="text-amber-800 text-sm">
-                No camera video — microphone only. Voice calls still work.
-              </p>
-              <p className="text-gray-600 text-xs">
-                If WhatsApp (or Zoom / Teams) is in a video call, it may hold the camera — then Chrome cannot show video
-                here, and WhatsApp may say "camera used by another app" if Chrome grabbed it first. Use one app at a time,
-                or plug in a second camera. Also check Windows Settings → Privacy → Camera for Chrome.
-              </p>
-              <button
-                type="button"
-                onClick={retryMedia}
-                className="text-sm font-medium text-blue-600 hover:text-blue-800 underline"
-              >
-                Try camera again
-              </button>
-            </div>
-          )}
-          {mediaStarted && !stream && !mediaError && mediaLoading && (
-            <p className="text-gray-600 text-sm mt-2">Waiting for permission or device…</p>
-          )}
-          {!mediaStarted && (
-            <p className="text-gray-500 text-sm mt-2 text-center max-w-72">
-              Tap <strong>Start camera &amp; microphone</strong> above to begin.
-            </p>
-          )}
-        </div>
-
-        <div className="flex flex-col items-center">
-          <h4 className="text-gray-700 font-semibold mb-2">Remote Camera</h4>
-          <div className="w-72 h-48 bg-black rounded-lg overflow-hidden border-2 border-gray-500 flex items-center justify-center">
-            {callAccepted ? (
-              <video ref={userVideo} autoPlay playsInline className="w-full h-full object-cover" />
-            ) : (
-              <p className="text-gray-400 text-sm">Waiting for connection...</p>
+      {/* Main panel: chat, with call overlay */}
+      <main className="relative flex flex-1 flex-col min-w-0">
+        {(socketError || callNotice) && (
+          <div className="absolute left-1/2 top-3 z-30 w-[90%] max-w-md -translate-x-1/2 space-y-2">
+            {socketError && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-900 shadow">
+                {socketError}
+              </div>
+            )}
+            {callNotice && (
+              <div className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm text-slate-800 shadow">
+                {callNotice}
+              </div>
             )}
           </div>
-        </div>
-      </div>
+        )}
 
-      {callAccepted && (
-        <div className="fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-4 rounded-full border border-gray-700 bg-gray-900 px-6 py-3 text-white shadow-2xl">
-          <span className="max-w-[220px] truncate text-sm text-gray-300">
-            {outgoingPeerUserIdRef.current ? `In call with ${callingToName}` : callerName ? `In call with ${callerName}` : "In call"}
-          </span>
-          <button
-            type="button"
-            onClick={hangUp}
-            className="flex items-center gap-2 rounded-full bg-red-600 px-4 py-2 text-sm font-semibold transition hover:bg-red-500"
-          >
-            <MdCallEnd size={20} />
-            End call
-          </button>
-        </div>
-      )}
+        <ChatWindow
+          me={joinId}
+          contact={selectedContact}
+          onStartCall={callToUser}
+          onMessageActivity={loadConversations}
+        />
 
-      {callInitiated && !callAccepted && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-gray-900 text-white rounded-3xl shadow-2xl w-72 p-6 flex flex-col items-center gap-4 animate-slideFade">
-            <div className="w-16 h-16 rounded-full bg-blue-600 flex items-center justify-center text-2xl font-bold border-4 border-blue-400">
-              {callingToName.charAt(0).toUpperCase()}
+        {/* ── Call overlay ─────────────────────────────────────────── */}
+        {callActive && (
+          <div className="absolute inset-0 z-40 flex flex-col bg-slate-900/95 p-6">
+            {mediaError && (
+              <div className="mx-auto mb-3 max-w-lg space-y-2">
+                <p className="rounded-lg border border-red-300 bg-red-50 px-4 py-2 text-sm text-red-700">
+                  {mediaError}
+                </p>
+                <button
+                  type="button"
+                  onClick={retryMedia}
+                  className="text-sm font-medium text-blue-300 underline"
+                >
+                  Retry camera &amp; microphone
+                </button>
+              </div>
+            )}
+
+            <div className="flex flex-1 flex-wrap items-center justify-center gap-6">
+              <div className="flex flex-col items-center">
+                <h4 className="mb-2 font-semibold text-slate-200">You</h4>
+                <div className="h-64 w-80 overflow-hidden rounded-xl border-2 border-blue-500 bg-black">
+                  <video
+                    ref={myVideo}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+                {stream && !hasVideoTrack && (
+                  <p className="mt-2 max-w-80 text-center text-xs text-amber-300">
+                    No camera video — microphone only. Voice still works.
+                  </p>
+                )}
+                {mediaLoading && (
+                  <p className="mt-2 text-sm text-slate-300">
+                    Starting camera… choose <strong>Allow</strong> if prompted.
+                  </p>
+                )}
+              </div>
+
+              <div className="flex flex-col items-center">
+                <h4 className="mb-2 font-semibold text-slate-200">
+                  {callAccepted
+                    ? callingToName || callerName || "Remote"
+                    : "Remote"}
+                </h4>
+                <div className="flex h-64 w-80 items-center justify-center overflow-hidden rounded-xl border-2 border-slate-600 bg-black">
+                  {callAccepted ? (
+                    <video
+                      ref={userVideo}
+                      autoPlay
+                      playsInline
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <p className="text-sm text-slate-400">
+                      {callInitiated ? "Ringing…" : "Waiting…"}
+                    </p>
+                  )}
+                </div>
+              </div>
             </div>
-            <p className="text-gray-400 text-sm uppercase tracking-widest">Calling…</p>
-            <h2 className="text-xl font-bold">{callingToName}</h2>
-            <button
-              type="button"
-              onClick={cancelOutgoingCall}
-              className="mt-2 w-14 h-14 rounded-full bg-red-600 hover:bg-red-500 flex items-center justify-center transition hover:scale-110"
-            >
-              <span className="text-2xl">✕</span>
-            </button>
-            <span className="text-xs text-gray-400">Cancel</span>
-          </div>
-        </div>
-      )}
 
-      {receivingCall && !callAccepted && (
-        <Calling callerName={callerName} onAnswer={answerCall} onReject={rejectCall} />
-      )}
-    </Layout>
+            {/* Controls */}
+            <div className="flex items-center justify-center gap-4 pt-4">
+              {callAccepted && (
+                <button
+                  type="button"
+                  onClick={hangUp}
+                  className="flex items-center gap-2 rounded-full bg-red-600 px-6 py-3 font-semibold text-white shadow-lg hover:bg-red-500"
+                >
+                  <MdCallEnd size={20} /> End call
+                </button>
+              )}
+              {callInitiated && !callAccepted && (
+                <button
+                  type="button"
+                  onClick={cancelOutgoingCall}
+                  className="flex items-center gap-2 rounded-full bg-red-600 px-6 py-3 font-semibold text-white shadow-lg hover:bg-red-500"
+                >
+                  <MdCallEnd size={20} /> Cancel
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Incoming call prompt (over everything) */}
+        {receivingCall && !callAccepted && (
+          <Calling
+            callerName={callerName}
+            onAnswer={answerCall}
+            onReject={rejectCall}
+          />
+        )}
+      </main>
+    </div>
   );
 };
 

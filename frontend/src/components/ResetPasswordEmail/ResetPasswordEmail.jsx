@@ -7,21 +7,19 @@ const ResetPasswordEmail = () => {
   const navigate = useNavigate();
   const token = searchParams.get("token");
 
-  const [phase, setPhase] = useState("loading");
-  const [errorMsg, setErrorMsg] = useState("");
+  const [phase, setPhase] = useState(token ? "loading" : "no_token");
+  const [errorMsg, setErrorMsg] = useState(
+    token
+      ? ""
+      : "This page needs a reset link from your email. You can request a new one below."
+  );
   const [password, setPassword] = useState("");
   const [cPassword, setCPassword] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
   const [submitError, setSubmitError] = useState("");
 
   useEffect(() => {
-    if (!token) {
-      setPhase("no_token");
-      setErrorMsg(
-        "This page needs a reset link from your email. You can request a new one below."
-      );
-      return;
-    }
+    if (!token) return;
 
     let cancelled = false;
     (async () => {

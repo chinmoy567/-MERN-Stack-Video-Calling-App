@@ -20,7 +20,8 @@ const Register = () => {
     formData.append("email", email);
     formData.append("mobile", mobile);
     formData.append("password", password);
-    formData.append("image", image);
+    // Profile image is optional — only send it when the user picked a file.
+    if (image) formData.append("image", image);
 
     try {
       const response = await AuthService.register(formData);

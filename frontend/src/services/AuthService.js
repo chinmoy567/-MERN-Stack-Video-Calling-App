@@ -149,14 +149,35 @@ class AuthService {
     localStorage.setItem("user", JSON.stringify(userData));
   }
 
-  getAllUsers() {
+  _authHeader() {
     const token = localStorage.getItem("accessToken");
-    const authorizationHeader = {
+    return {
       headers: {
         Authorization: token ? "Bearer " + token : "",
       },
     };
-    return this.axiosInstance.get(this.url + "all-users", authorizationHeader);
+  }
+
+  getAllUsers() {
+    return this.axiosInstance.get(this.url + "all-users", this._authHeader());
+  }
+
+  getProfile() {
+    return this.axiosInstance.get(this.url + "profile", this._authHeader());
+  }
+
+  getConversations() {
+    return this.axiosInstance.get(
+      this.url + "conversations",
+      this._authHeader()
+    );
+  }
+
+  getMessages(userId) {
+    return this.axiosInstance.get(
+      this.url + "messages/" + userId,
+      this._authHeader()
+    );
   }
 
   verifyEmail(token) {

@@ -7,7 +7,12 @@ const path = require("path");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const jwt = require("jsonwebtoken");
+const dns = require("dns");
 const { Server } = require("socket.io");
+
+// Some local/ISP DNS resolvers refuse SRV queries (mongodb+srv://) with
+// querySrv ECONNREFUSED. Fall back to public resolvers so Atlas connects.
+dns.setServers(["8.8.8.8", "1.1.1.1", ...dns.getServers()]);
 
 // External modules
 const userRoute = require("./routes/userRoute");

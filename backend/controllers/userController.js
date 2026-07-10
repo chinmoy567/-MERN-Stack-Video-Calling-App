@@ -80,7 +80,9 @@ const userRegister = async (req, res) => {
       email,
       mobile,
       password: hashPassword,
-      image: "images/" + req.file.filename,
+      image: req.file
+        ? "images/" + req.file.filename
+        : "images/default-avatar.png",
     });
 
     const userData = await user.save();
