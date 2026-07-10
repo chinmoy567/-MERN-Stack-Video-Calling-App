@@ -18,7 +18,9 @@ class AuthService {
   constructor() {
     this._refreshPromise = null;
 
-    this.axiosInstance = axios.create({ timeout: 10000 });
+    // Render free-tier backends cold-start after idling; give requests enough
+    // time to survive a wake-up instead of failing with a generic Network Error.
+    this.axiosInstance = axios.create({ timeout: 30000 });
     this.axiosInstance.interceptors.response.use(
       (response) => response,
       async (error) => {
@@ -73,7 +75,7 @@ class AuthService {
   }
 
   register(formData) {
-    return axios.post(
+    return this.axiosInstance.post(
       this.url + "register",
       formData,
       this.configMultipartData
@@ -81,7 +83,7 @@ class AuthService {
   }
 
   login(credentials) {
-    return axios.post(
+    return this.axiosInstance.post(
       this.url + "login",
       credentials,
       this.configJsonData
@@ -123,7 +125,7 @@ class AuthService {
   }
 
   forgotPassword(payload) {
-    return axios.post(
+    return this.axiosInstance.post(
       this.url + "forgot-password",
       payload,
       this.configJsonData
@@ -184,19 +186,19 @@ class AuthService {
   }
 
   verifyEmail(token) {
-    return axios.get(
+    return this.axiosInstance.get(
       `${this.url}verify-email?token=${encodeURIComponent(token)}`
     );
   }
 
   validateResetToken(token) {
-    return axios.get(
+    return this.axiosInstance.get(
       `${this.url}reset-password/validate?token=${encodeURIComponent(token)}`
     );
   }
 
   submitPasswordReset(payload) {
-    return axios.post(
+    return this.axiosInstance.post(
       this.url + "reset-password",
       payload,
       this.configJsonData
