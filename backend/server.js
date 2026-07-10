@@ -18,7 +18,7 @@ dns.setServers(["8.8.8.8", "1.1.1.1", ...dns.getServers()]);
 const userRoute = require("./routes/userRoute");
 const { SocketServer } = require("./socketHandle");
 const app = express();
-const port = process.env.SERVER_PORT;
+const port = process.env.PORT || process.env.SERVER_PORT;
 
 const corsOrigin = process.env.CORS_ORIGIN || "http://localhost:5173";
 
