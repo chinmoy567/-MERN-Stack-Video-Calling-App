@@ -15,4 +15,65 @@
   .animate-slideFade {
     animation: slideFade 0.6s ease-out;
   }
+
+  @keyframes float {
+    0%,
+    100% {
+      transform: translateY(0) rotate(0deg);
+    }
+    50% {
+      transform: translateY(-18px) rotate(3deg);
+    }
+  }
+
+  .animate-float {
+    animation: float 7s ease-in-out infinite;
+  }
+
+  .animate-float-slow {
+    animation: float 11s ease-in-out infinite;
+  }
+
+  @keyframes orbPulse {
+    0%,
+    100% {
+      opacity: 0.55;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.85;
+      transform: scale(1.08);
+    }
+  }
+
+  .animate-orb {
+    animation: orbPulse 9s ease-in-out infinite;
+  }
+
+  @keyframes fadeUp {
+    0% {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-fadeUp {
+    animation: fadeUp 0.7s ease-out both;
+  }
+
+  .animation-delay-150 {
+    animation-delay: 150ms;
+  }
+
+  .animation-delay-300 {
+    animation-delay: 300ms;
+  }
+
+  .animation-delay-450 {
+    animation-delay: 450ms;
+  }
 }

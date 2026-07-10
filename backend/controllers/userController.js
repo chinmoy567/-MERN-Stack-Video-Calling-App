@@ -14,6 +14,11 @@ const PasswordReset = require("../models/passwordResetModel");
 const Blacklist = require("../models/blacklistModel");
 const Otp = require("../models/otpModel");
 const { deleteFile } = require("../helpers/deletFile");
+const {
+  isConfigured: cloudinaryConfigured,
+  uploadImageBuffer,
+  deleteImage,
+} = require("../config/cloudinary");
 const mailer = require("../helpers/mailer");
 const { oneMinuteExpiry,threeMinuteExpiry } = require("../helpers/otpValidate");
 
@@ -51,6 +56,29 @@ const genericEmailResponse = () => ({
 // 6-digit OTP
 const generateRandomOtp = () => Math.floor(100000 + Math.random() * 900000);
 
+// Upload a profile image buffer to Cloudinary; returns { image, imagePublicId }.
+const uploadProfileImage = async (file) => {
+  if (!cloudinaryConfigured()) {
+    throw new Error("Image upload service is not configured.");
+  }
+  const result = await uploadImageBuffer(file.buffer);
+  return { image: result.secure_url, imagePublicId: result.public_id };
+};
+
+// Remove a user's previous image: Cloudinary asset or legacy local file.
+const removeOldProfileImage = async (user) => {
+  if (!user) return;
+  if (user.imagePublicId) {
+    await deleteImage(user.imagePublicId);
+  } else if (
+    user.image &&
+    user.image.startsWith("images/") &&
+    user.image !== "images/default-avatar.png"
+  ) {
+    deleteFile(path.join(__dirname, "../public/" + user.image));
+  }
+};
+
 
 
 // User Registration Controller
@@ -75,14 +103,26 @@ const userRegister = async (req, res) => {
     });
   }
   const hashPassword = await bcrypt.hash(password, 10);
+
+    let imageData = { image: "images/default-avatar.png", imagePublicId: "" };
+    if (req.file) {
+      try {
+        imageData = await uploadProfileImage(req.file);
+      } catch (uploadError) {
+        console.error("Profile image upload failed:", uploadError.message);
+        return res.status(502).json({
+          success: false,
+          msg: "Profile image upload failed. Please try again.",
+        });
+      }
+    }
+
     const user = new User({
       name,
       email,
       mobile,
       password: hashPassword,
-      image: req.file
-        ? "images/" + req.file.filename
-        : "images/default-avatar.png",
+      ...imageData,
     });
 
     const userData = await user.save();
@@ -442,11 +482,22 @@ const updateProfile = async (req, res) => {
       const user_id = req.user.userId;
 
       if (req.file != undefined) {
-        data.image = "images/" + req.file.filename;
-        const oldUser = await User.findOne({ _id: user_id });
-        const oldFilePath = path.join(__dirname, "../public/" + oldUser.image);
-        deleteFile(oldFilePath);
+        let uploaded;
+        try {
+          uploaded = await uploadProfileImage(req.file);
+        } catch (uploadError) {
+          console.error("Profile image upload failed:", uploadError.message);
+          return res.status(502).json({
+            success: false,
+            msg: "Profile image upload failed. Please try again.",
+          });
         }
+        // Only after the new image is safely stored, remove the old one.
+        const oldUser = await User.findById(user_id);
+        await removeOldProfileImage(oldUser);
+        data.image = uploaded.image;
+        data.imagePublicId = uploaded.imagePublicId;
+      }
       const userData = await User.findByIdAndUpdate(
         user_id,
         { $set: data }, { new: true }

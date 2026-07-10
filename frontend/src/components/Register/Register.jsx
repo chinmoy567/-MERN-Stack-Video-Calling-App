@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import AuthService from "../../services/AuthService";
+import { validateImageFile } from "../../utils/avatar";
 
 const Register = () => {
   const navigate = useNavigate();
@@ -131,7 +132,20 @@ const Register = () => {
             <label className="block mb-1 font-medium">Profile Image</label>
             <input
               type="file"
-              onChange={(e) => setImage(e.target.files[0])}
+              accept="image/jpeg,image/png,image/webp"
+              onChange={(e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const fileError = validateImageFile(file);
+                if (fileError) {
+                  setErrors((prev) => ({ ...prev, image: fileError }));
+                  setImage(null);
+                  e.target.value = "";
+                  return;
+                }
+                setErrors((prev) => ({ ...prev, image: undefined }));
+                setImage(file);
+              }}
               className="w-full text-gray-300 bg-gray-800 border border-gray-700 
               rounded-lg p-2"
             />

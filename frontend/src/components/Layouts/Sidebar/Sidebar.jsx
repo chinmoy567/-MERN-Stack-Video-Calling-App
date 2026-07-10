@@ -1,9 +1,8 @@
 import { useNavigate } from "react-router-dom";
-import { MdLogout } from "react-icons/md";
+import { MdLogout, MdDashboard } from "react-icons/md";
 import AuthService from "../../../services/AuthService";
 import socketInstance from "../../../socket";
-
-const BE_URL = import.meta.env.VITE_API_BE_URL;
+import { resolveAvatar } from "../../../utils/avatar";
 
 const Sidebar = ({
   users = [],
@@ -28,7 +27,7 @@ const Sidebar = ({
     if (socket) socket.disconnect();
     socketInstance.setSocket();
     AuthService.logoutUser();
-    navigate("/login", { replace: true });
+    navigate("/", { replace: true });
   };
 
   // Sort: contacts with conversations first (most recent), then the rest.
@@ -52,7 +51,7 @@ const Sidebar = ({
       >
         {currentUser?.image && (
           <img
-            src={`${BE_URL}${currentUser.image}`}
+            src={resolveAvatar(currentUser.image)}
             alt={currentUser.name}
             className="h-10 w-10 rounded-full object-cover border border-slate-600"
           />
@@ -65,6 +64,13 @@ const Sidebar = ({
 
       <div className="flex items-center justify-between px-4 py-3">
         <span className="text-sm font-semibold text-slate-300">Chats</span>
+        <button
+          type="button"
+          onClick={() => navigate("/dashboard")}
+          className="ml-auto mr-2 flex items-center gap-1 rounded bg-slate-700 px-3 py-1 text-xs font-medium hover:bg-slate-600 transition"
+        >
+          <MdDashboard size={14} /> Dashboard
+        </button>
         <button
           type="button"
           onClick={handleLogout}
@@ -97,7 +103,7 @@ const Sidebar = ({
                 >
                   <div className="relative shrink-0">
                     <img
-                      src={`${BE_URL}${user.image}`}
+                      src={resolveAvatar(user.image)}
                       alt={user.name}
                       className="h-11 w-11 rounded-full object-cover border border-slate-600"
                     />

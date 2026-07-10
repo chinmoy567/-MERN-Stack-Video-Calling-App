@@ -130,18 +130,21 @@ class AuthService {
     );
   }
 
-  updateUserData(formData) {
+  updateUserData(formData, onUploadProgress) {
     const token = localStorage.getItem("accessToken");
-    const authorizationHeader = {
+    const config = {
       headers: {
         Authorization: token ? "Bearer " + token : "",
       },
+      // Image uploads can exceed the default 10s timeout.
+      timeout: 60000,
     };
+    if (onUploadProgress) config.onUploadProgress = onUploadProgress;
 
     return this.axiosInstance.post(
       this.url + "update-profile",
       formData,
-      authorizationHeader
+      config
     );
   }
 

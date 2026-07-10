@@ -5,6 +5,9 @@ import {
   Routes,
 } from "react-router-dom";
 import Dashboard from "./components/Dashboard/Dashboard";
+import DashboardHome from "./components/Dashboard/DashboardHome";
+import Landing from "./components/Landing/Landing";
+import AppShell from "./components/Layouts/AppShell/AppShell";
 import Profile from "./components/Profile/Profile";
 import ForgotPassword from "./components/ForgotPassword/ForgotPassword";
 import Login from "./components/Login/Login";
@@ -37,7 +40,7 @@ function App() {
     <Router>
       <Routes>
         {/* Unprotected Routes */}
-        <Route path="/" element={<Navigate to="/login" />} />
+        <Route path="/" element={<UnProtectedRoute element={<Landing />} />} />
 
         <Route
           path="/login"
@@ -64,12 +67,34 @@ function App() {
         {/* Protected Routes */}
         <Route
           path="/dashboard"
+          element={
+            <ProtectedRoute
+              element={
+                <AppShell title="Dashboard">
+                  <DashboardHome />
+                </AppShell>
+              }
+            />
+          }
+        />
+
+        {/* Full-screen chat + video calling workspace */}
+        <Route
+          path="/chat"
           element={<ProtectedRoute element={<Dashboard />} />}
         />
 
         <Route
           path="/profile"
-          element={<ProtectedRoute element={<Profile />} />}
+          element={
+            <ProtectedRoute
+              element={
+                <AppShell title="Profile">
+                  <Profile />
+                </AppShell>
+              }
+            />
+          }
         />
 
         <Route path="*" element={<NotFound />} />

@@ -1,6 +1,5 @@
 // Core modules
 const express = require('express');
-const path = require('path');
 const multer = require('multer');
 const rateLimit = require('express-rate-limit');
 const userRoute = express.Router();
@@ -38,32 +37,39 @@ const refreshAuth = require("../middleware/refreshAuth");
 
 
 
-// --- Multer Disk Storage Configuration ---
-const storage = multer.diskStorage({
-    destination: function(req, file, cb) {
-        if (file.mimetype === "image/jpeg" || file.mimetype === "image/png") {
-          cb(null, path.join(__dirname, "../public/images"));
-        } else {
-          cb(new Error(" Only JPEG and PNG files are allowed!"), false);
-        }
-    },
-    filename: function(req, file, cb) {
-        const safe = path.basename(file.originalname).replace(/[^a-zA-Z0-9._-]/g, "_");
-        const name = Date.now() + "-" + safe;
-        cb(null, name);
-    }
-});
+// --- Multer Memory Storage (images are uploaded to Cloudinary, not disk) ---
+const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
+
 const fileFilter = (req, file, cb) => {
-  if (file.mimetype === "image/jpeg" || file.mimetype === "image/png") {
+  if (ALLOWED_IMAGE_TYPES.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error("Invalid file type, only JPEG and PNG is allowed!"), false);
+    const err = new multer.MulterError("LIMIT_UNEXPECTED_FILE", file.fieldname);
+    err.message = "Invalid file type. Only JPG, JPEG, PNG and WEBP are allowed.";
+    cb(err, false);
   }
 };
+
 const upload = multer({
-  storage: storage,
-  fileFilter: fileFilter,
+  storage: multer.memoryStorage(),
+  fileFilter,
+  limits: { fileSize: MAX_IMAGE_SIZE },
 });
+
+// Wrap multer so validation errors return clean 400 JSON instead of a 500.
+const uploadImage = (req, res, next) => {
+  upload.single("image")(req, res, (err) => {
+    if (err) {
+      const msg =
+        err.code === "LIMIT_FILE_SIZE"
+          ? "Image is too large. Maximum size is 5 MB."
+          : err.message || "Image upload failed.";
+      return res.status(400).json({ success: false, msg });
+    }
+    next();
+  });
+};
 
 
 
@@ -71,8 +77,8 @@ const upload = multer({
 userRoute.post(
   "/register",
   registerLimiter,
-  upload.single("image"), 
-  registerValidator, 
+  uploadImage,
+  registerValidator,
   userController.userRegister
 );
 
@@ -92,7 +98,7 @@ userRoute.post(
 
 //authenticated route
 userRoute.get("/profile", auth, userController.userProfile);
-userRoute.post("/update-profile", auth,upload.single("image"), updateProfileValidator, userController.updateProfile);
+userRoute.post("/update-profile", auth, uploadImage, updateProfileValidator, userController.updateProfile);
 userRoute.get("/refresh-token", refreshAuth, userController.refreshToken);
 userRoute.post("/logout", auth, userController.logout);
 

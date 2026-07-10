@@ -27,6 +27,12 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  // Cloudinary public_id of the current profile image; empty for
+  // default/legacy local images.
+  imagePublicId: {
+    type: String,
+    default: "",
+  },
 });
 
 userSchema.set("toJSON", {

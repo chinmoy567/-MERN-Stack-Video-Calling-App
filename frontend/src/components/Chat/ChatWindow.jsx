@@ -2,8 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { MdVideocam, MdSend } from "react-icons/md";
 import AuthService from "../../services/AuthService";
 import socketInstance from "../../socket";
-
-const BE_URL = import.meta.env.VITE_API_BE_URL;
+import { resolveAvatar } from "../../utils/avatar";
 
 const formatTime = (iso) => {
   try {
@@ -158,7 +157,7 @@ const ChatWindow = ({ me, contact, onStartCall, onMessageActivity }) => {
       <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
         <div className="flex items-center gap-3">
           <img
-            src={`${BE_URL}${contact.image}`}
+            src={resolveAvatar(contact.image)}
             alt={contact.name}
             className="h-10 w-10 rounded-full object-cover border border-slate-200"
           />
