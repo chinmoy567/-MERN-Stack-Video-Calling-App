@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { MdVideocam, MdSend } from "react-icons/md";
+import { MdVideocam, MdCall, MdSend } from "react-icons/md";
 import AuthService from "../../services/AuthService";
 import socketInstance from "../../socket";
 import { resolveAvatar } from "../../utils/avatar";
@@ -168,14 +168,24 @@ const ChatWindow = ({ me, contact, onStartCall, onMessageActivity }) => {
             </p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => onStartCall(contact._id, contact.name)}
-          className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-blue-700 transition"
-        >
-          <MdVideocam size={18} />
-          Video Call
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => onStartCall(contact._id, contact.name, "audio")}
+            className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-700 transition"
+          >
+            <MdCall size={18} />
+            Audio Call
+          </button>
+          <button
+            type="button"
+            onClick={() => onStartCall(contact._id, contact.name, "video")}
+            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-blue-700 transition"
+          >
+            <MdVideocam size={18} />
+            Video Call
+          </button>
+        </div>
       </div>
 
       {/* Messages */}

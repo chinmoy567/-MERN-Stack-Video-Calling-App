@@ -1,6 +1,6 @@
 import { MdCall, MdCallEnd } from "react-icons/md";
 
-const Calling = ({ callerName, onAnswer, onReject }) => {
+const Calling = ({ callerName, callType = "video", onAnswer, onReject }) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="bg-gray-900 text-white rounded-3xl shadow-2xl w-80 p-6 flex flex-col items-center gap-4 animate-slideFade">
@@ -13,7 +13,9 @@ const Calling = ({ callerName, onAnswer, onReject }) => {
         </div>
 
         <div className="text-center">
-          <p className="text-sm text-gray-400 uppercase tracking-widest">Incoming Call</p>
+          <p className="text-sm text-gray-400 uppercase tracking-widest">
+            Incoming {callType === "audio" ? "Audio" : "Video"} Call
+          </p>
           <h2 className="text-2xl font-bold mt-1">{callerName}</h2>
         </div>
 

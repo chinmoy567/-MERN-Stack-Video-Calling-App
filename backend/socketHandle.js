@@ -42,6 +42,7 @@ const SocketServer = async (socket, io) => {
         signal: data.signalData,
         from: data.from,
         name: data.name,
+        callType: data.callType === "audio" ? "audio" : "video",
       });
     } else {
       console.log("Target user not found or offline");

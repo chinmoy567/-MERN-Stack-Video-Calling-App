@@ -6,7 +6,7 @@ import Peer from "simple-peer";
 import Calling from "../Calling/Calling";
 import Sidebar from "../Layouts/Sidebar/Sidebar";
 import ChatWindow from "../Chat/ChatWindow";
-import { MdCallEnd } from "react-icons/md";
+import { MdCallEnd, MdMic } from "react-icons/md";
 
 const ICE_SERVERS = {
   iceServers: [
@@ -36,13 +36,17 @@ function gum(constraints) {
   });
 }
 
-async function acquireLocalMedia() {
+async function acquireLocalMedia(audioOnly = false) {
   const md = navigator.mediaDevices;
   if (!md?.getUserMedia) {
     throw new DOMException(
       "Use HTTPS or localhost for camera/microphone.",
       "NotSupportedError"
     );
+  }
+
+  if (audioOnly) {
+    return gum({ video: false, audio: true });
   }
 
   const mergeVideoInto = async (aStream, videoConstraints) => {
@@ -176,8 +180,11 @@ const Dashboard = () => {
   const [callingToName, setCallingToName] = useState("");
   const [callNotice, setCallNotice] = useState(null);
   const [socketError, setSocketError] = useState(null);
+  const [callType, setCallType] = useState("video"); // "video" | "audio" — current/incoming call kind
+  const [incomingCallType, setIncomingCallType] = useState("video");
 
   const [mediaStarted, setMediaStarted] = useState(false);
+  const mediaAudioOnlyRef = useRef(false);
   const [mediaLoading, setMediaLoading] = useState(false);
   const [mediaError, setMediaError] = useState(null);
   const [mediaRetryKey, setMediaRetryKey] = useState(0);
@@ -189,7 +196,7 @@ const Dashboard = () => {
   const mediaLoadGenRef = useRef(0);
   const callingToNameRef = useRef("");
   const outgoingPeerUserIdRef = useRef(null);
-  const pendingCallRef = useRef(null); // {userId, userName} — call requested before media ready
+  const pendingCallRef = useRef(null); // {userId, userName, callType} — call requested before media ready
 
   const receivingCallRef = useRef(false);
   const callInitiatedRef = useRef(false);
@@ -263,6 +270,8 @@ const Dashboard = () => {
     setCaller("");
     setCallerName("");
     setCallerSignal(null);
+    setCallType("video");
+    mediaAudioOnlyRef.current = false;
     outgoingPeerUserIdRef.current = null;
   }, []);
 
@@ -283,7 +292,7 @@ const Dashboard = () => {
 
     (async () => {
       try {
-        const s = await acquireLocalMedia();
+        const s = await acquireLocalMedia(mediaAudioOnlyRef.current);
         if (myGen !== mediaLoadGenRef.current) {
           s.getTracks().forEach((t) => t.stop());
           return;
@@ -318,8 +327,9 @@ const Dashboard = () => {
     );
 
   const startOutgoingCall = useCallback(
-    (userId, userName, activeStream) => {
+    (userId, userName, activeStream, type = "video") => {
       outgoingPeerUserIdRef.current = userId;
+      setCallType(type);
       const peer = createPeer({ initiator: true, stream: activeStream });
 
       peer.on("signal", (data) => {
@@ -330,6 +340,7 @@ const Dashboard = () => {
           signalData: data,
           from: me,
           name: joinName,
+          callType: type,
         });
       });
       peer.on("stream", (remoteStream) => {
@@ -352,9 +363,9 @@ const Dashboard = () => {
   // When media becomes ready and a call was queued, start it.
   useEffect(() => {
     if (stream && pendingCallRef.current) {
-      const { userId, userName } = pendingCallRef.current;
+      const { userId, userName, callType: pendingType } = pendingCallRef.current;
       pendingCallRef.current = null;
-      if (me) startOutgoingCall(userId, userName, stream);
+      if (me) startOutgoingCall(userId, userName, stream, pendingType);
     }
   }, [stream, me, startOutgoingCall]);
 
@@ -390,6 +401,7 @@ const Dashboard = () => {
       setCaller(data.from);
       setCallerName(data.name);
       setCallerSignal(data.signal);
+      setIncomingCallType(data.callType === "audio" ? "audio" : "video");
     });
 
     s.on("callAccepted", (signal) => {
@@ -472,7 +484,7 @@ const Dashboard = () => {
 
   // Called from chat header / sidebar. Ensures media is running first.
   const callToUser = useCallback(
-    (userId, userName) => {
+    (userId, userName, type = "video") => {
       if (!me) {
         setCallNotice("Connecting to server — try again in a moment.");
         return;
@@ -481,11 +493,13 @@ const Dashboard = () => {
         setCallNotice("Finish your current call before starting another.");
         return;
       }
+      setCallType(type);
       if (stream) {
-        startOutgoingCall(userId, userName, stream);
+        startOutgoingCall(userId, userName, stream, type);
       } else {
         // Queue the call and start media (browsers need a user gesture — this is one).
-        pendingCallRef.current = { userId, userName };
+        pendingCallRef.current = { userId, userName, callType: type };
+        mediaAudioOnlyRef.current = type === "audio";
         setCallingToName(userName || "User");
         setCallInitiated(true);
         setMediaError(null);
@@ -499,10 +513,17 @@ const Dashboard = () => {
     if (!joinId) return;
     if (!stream) {
       // Start media, then this function is effectively retried by the user.
+      mediaAudioOnlyRef.current = incomingCallType === "audio";
+      setCallType(incomingCallType);
       setMediaStarted(true);
-      setCallNotice("Starting camera… tap Answer again once the preview appears.");
+      setCallNotice(
+        incomingCallType === "audio"
+          ? "Starting microphone… tap Answer again once ready."
+          : "Starting camera… tap Answer again once the preview appears."
+      );
       return;
     }
+    setCallType(incomingCallType);
     setCallAccepted(true);
     setReceivingCall(false);
 
@@ -635,7 +656,7 @@ const Dashboard = () => {
             <div className="flex flex-1 flex-wrap items-center justify-center gap-6">
               <div className="flex flex-col items-center">
                 <h4 className="mb-2 font-semibold text-slate-200">You</h4>
-                <div className="h-64 w-80 overflow-hidden rounded-xl border-2 border-blue-500 bg-black">
+                <div className="relative h-64 w-80 overflow-hidden rounded-xl border-2 border-blue-500 bg-black">
                   <video
                     ref={myVideo}
                     autoPlay
@@ -643,15 +664,24 @@ const Dashboard = () => {
                     muted
                     className="h-full w-full object-cover"
                   />
+                  {callType === "audio" && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-800">
+                      <MdMic size={40} className="text-blue-400" />
+                      <span className="text-xs text-slate-300">Audio call</span>
+                    </div>
+                  )}
                 </div>
-                {stream && !hasVideoTrack && (
+                {callType !== "audio" && stream && !hasVideoTrack && (
                   <p className="mt-2 max-w-80 text-center text-xs text-amber-300">
                     No camera video — microphone only. Voice still works.
                   </p>
                 )}
                 {mediaLoading && (
                   <p className="mt-2 text-sm text-slate-300">
-                    Starting camera… choose <strong>Allow</strong> if prompted.
+                    {callType === "audio"
+                      ? "Starting microphone… choose "
+                      : "Starting camera… choose "}
+                    <strong>Allow</strong> if prompted.
                   </p>
                 )}
               </div>
@@ -662,14 +692,22 @@ const Dashboard = () => {
                     ? callingToName || callerName || "Remote"
                     : "Remote"}
                 </h4>
-                <div className="flex h-64 w-80 items-center justify-center overflow-hidden rounded-xl border-2 border-slate-600 bg-black">
+                <div className="relative flex h-64 w-80 items-center justify-center overflow-hidden rounded-xl border-2 border-slate-600 bg-black">
                   {callAccepted ? (
-                    <video
-                      ref={userVideo}
-                      autoPlay
-                      playsInline
-                      className="h-full w-full object-cover"
-                    />
+                    <>
+                      <video
+                        ref={userVideo}
+                        autoPlay
+                        playsInline
+                        className="h-full w-full object-cover"
+                      />
+                      {callType === "audio" && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-800">
+                          <MdMic size={40} className="text-blue-400" />
+                          <span className="text-xs text-slate-300">Audio call</span>
+                        </div>
+                      )}
+                    </>
                   ) : (
                     <p className="text-sm text-slate-400">
                       {callInitiated ? "Ringing…" : "Waiting…"}
@@ -707,6 +745,7 @@ const Dashboard = () => {
         {receivingCall && !callAccepted && (
           <Calling
             callerName={callerName}
+            callType={incomingCallType}
             onAnswer={answerCall}
             onReject={rejectCall}
           />
