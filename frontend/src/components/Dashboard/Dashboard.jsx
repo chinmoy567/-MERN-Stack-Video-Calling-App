@@ -6,7 +6,7 @@ import Peer from "simple-peer";
 import Calling from "../Calling/Calling";
 import Sidebar from "../Layouts/Sidebar/Sidebar";
 import ChatWindow from "../Chat/ChatWindow";
-import { MdCallEnd, MdMic } from "react-icons/md";
+import { MdCallEnd, MdMic, MdMenu, MdClose } from "react-icons/md";
 
 const ICE_SERVERS = {
   iceServers: [
@@ -167,6 +167,7 @@ const Dashboard = () => {
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [listError, setListError] = useState(null);
   const [selectedContact, setSelectedContact] = useState(null);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   const [stream, setStream] = useState(null);
   const [me, setMe] = useState("");
@@ -599,8 +600,8 @@ const Dashboard = () => {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-slate-100">
-      {/* Sidebar */}
-      <aside className="w-80 shrink-0 border-r border-slate-800">
+      {/* Sidebar — desktop */}
+      <aside className="hidden w-80 shrink-0 border-r border-slate-800 lg:block">
         <Sidebar
           users={users}
           onlineUsers={onlineUsers}
@@ -611,8 +612,46 @@ const Dashboard = () => {
         />
       </aside>
 
+      {/* Sidebar — mobile drawer */}
+      {mobileSidebarOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <div
+            className="absolute inset-0 bg-slate-900/50"
+            onClick={() => setMobileSidebarOpen(false)}
+          />
+          <aside className="absolute inset-y-0 left-0 w-[85%] max-w-80 shadow-2xl">
+            <Sidebar
+              users={users}
+              onlineUsers={onlineUsers}
+              conversations={conversations}
+              selectedId={selectedContact?._id}
+              onSelect={(u) => {
+                setSelectedContact(u);
+                setMobileSidebarOpen(false);
+              }}
+              listError={listError}
+            />
+          </aside>
+        </div>
+      )}
+
       {/* Main panel: chat, with call overlay */}
       <main className="relative flex flex-1 flex-col min-w-0">
+        {/* Mobile top bar */}
+        <div className="flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-2 lg:hidden">
+          <button
+            type="button"
+            onClick={() => setMobileSidebarOpen((o) => !o)}
+            className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"
+            aria-label="Toggle contacts"
+          >
+            {mobileSidebarOpen ? <MdClose size={20} /> : <MdMenu size={20} />}
+          </button>
+          <span className="text-sm font-semibold text-slate-700">
+            {selectedContact?.name || "Chats"}
+          </span>
+        </div>
+
         {(socketError || callNotice) && (
           <div className="absolute left-1/2 top-3 z-30 w-[90%] max-w-md -translate-x-1/2 space-y-2">
             {socketError && (
@@ -637,9 +676,9 @@ const Dashboard = () => {
 
         {/* ── Call overlay ─────────────────────────────────────────── */}
         {callActive && (
-          <div className="absolute inset-0 z-40 flex flex-col bg-slate-900/95 p-6">
+          <div className="absolute inset-0 z-40 flex flex-col overflow-y-auto bg-slate-900/95 p-4 backdrop-blur-sm sm:p-6">
             {mediaError && (
-              <div className="mx-auto mb-3 max-w-lg space-y-2">
+              <div className="mx-auto mb-3 w-full max-w-lg space-y-2">
                 <p className="rounded-lg border border-red-300 bg-red-50 px-4 py-2 text-sm text-red-700">
                   {mediaError}
                 </p>
@@ -653,10 +692,10 @@ const Dashboard = () => {
               </div>
             )}
 
-            <div className="flex flex-1 flex-wrap items-center justify-center gap-6">
-              <div className="flex flex-col items-center">
+            <div className="flex flex-1 flex-col items-center justify-center gap-6 py-4 sm:flex-row sm:flex-wrap">
+              <div className="flex w-full max-w-xs flex-col items-center sm:w-80">
                 <h4 className="mb-2 font-semibold text-slate-200">You</h4>
-                <div className="relative h-64 w-80 overflow-hidden rounded-xl border-2 border-blue-500 bg-black">
+                <div className="glass-card tilt-card relative aspect-video w-full overflow-hidden !rounded-xl border-2 border-indigo-500/70 bg-black [perspective:1000px] sm:h-64 sm:aspect-auto">
                   <video
                     ref={myVideo}
                     autoPlay
@@ -666,7 +705,7 @@ const Dashboard = () => {
                   />
                   {callType === "audio" && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-800">
-                      <MdMic size={40} className="text-blue-400" />
+                      <MdMic size={40} className="text-indigo-400" />
                       <span className="text-xs text-slate-300">Audio call</span>
                     </div>
                   )}
@@ -677,7 +716,7 @@ const Dashboard = () => {
                   </p>
                 )}
                 {mediaLoading && (
-                  <p className="mt-2 text-sm text-slate-300">
+                  <p className="mt-2 text-center text-sm text-slate-300">
                     {callType === "audio"
                       ? "Starting microphone… choose "
                       : "Starting camera… choose "}
@@ -686,13 +725,13 @@ const Dashboard = () => {
                 )}
               </div>
 
-              <div className="flex flex-col items-center">
-                <h4 className="mb-2 font-semibold text-slate-200">
+              <div className="flex w-full max-w-xs flex-col items-center sm:w-80">
+                <h4 className="mb-2 truncate font-semibold text-slate-200">
                   {callAccepted
                     ? callingToName || callerName || "Remote"
                     : "Remote"}
                 </h4>
-                <div className="relative flex h-64 w-80 items-center justify-center overflow-hidden rounded-xl border-2 border-slate-600 bg-black">
+                <div className="glass-card relative flex aspect-video w-full items-center justify-center overflow-hidden !rounded-xl border-2 border-slate-600 bg-black sm:h-64 sm:aspect-auto">
                   {callAccepted ? (
                     <>
                       <video
@@ -703,7 +742,7 @@ const Dashboard = () => {
                       />
                       {callType === "audio" && (
                         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-800">
-                          <MdMic size={40} className="text-blue-400" />
+                          <MdMic size={40} className="text-indigo-400" />
                           <span className="text-xs text-slate-300">Audio call</span>
                         </div>
                       )}
@@ -718,12 +757,12 @@ const Dashboard = () => {
             </div>
 
             {/* Controls */}
-            <div className="flex items-center justify-center gap-4 pt-4">
+            <div className="flex items-center justify-center gap-4 pb-2 pt-4">
               {callAccepted && (
                 <button
                   type="button"
                   onClick={hangUp}
-                  className="flex items-center gap-2 rounded-full bg-red-600 px-6 py-3 font-semibold text-white shadow-lg hover:bg-red-500"
+                  className="flex items-center gap-2 rounded-full bg-gradient-to-r from-red-600 to-rose-600 px-6 py-3 font-semibold text-white shadow-lg shadow-red-950/50 transition hover:from-red-500 hover:to-rose-500"
                 >
                   <MdCallEnd size={20} /> End call
                 </button>
@@ -732,7 +771,7 @@ const Dashboard = () => {
                 <button
                   type="button"
                   onClick={cancelOutgoingCall}
-                  className="flex items-center gap-2 rounded-full bg-red-600 px-6 py-3 font-semibold text-white shadow-lg hover:bg-red-500"
+                  className="flex items-center gap-2 rounded-full bg-gradient-to-r from-red-600 to-rose-600 px-6 py-3 font-semibold text-white shadow-lg shadow-red-950/50 transition hover:from-red-500 hover:to-rose-500"
                 >
                   <MdCallEnd size={20} /> Cancel
                 </button>

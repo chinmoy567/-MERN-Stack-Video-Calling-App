@@ -154,36 +154,38 @@ const ChatWindow = ({ me, contact, onStartCall, onMessageActivity }) => {
   return (
     <div className="flex flex-1 flex-col bg-slate-50 min-h-0">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-3 sm:px-4">
+        <div className="flex min-w-0 items-center gap-3">
           <img
             src={resolveAvatar(contact.image)}
             alt={contact.name}
-            className="h-10 w-10 rounded-full object-cover border border-slate-200"
+            className="h-10 w-10 shrink-0 rounded-full object-cover border border-slate-200"
           />
-          <div>
-            <p className="font-semibold text-slate-800">{contact.name}</p>
+          <div className="min-w-0">
+            <p className="truncate font-semibold text-slate-800">{contact.name}</p>
             <p className="text-xs text-slate-400">
               {peerTyping ? "typing…" : "Chat"}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <button
             type="button"
             onClick={() => onStartCall(contact._id, contact.name, "audio")}
-            className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-700 transition"
+            aria-label="Audio call"
+            className="flex items-center gap-2 rounded-lg bg-emerald-600 px-2.5 py-2 text-sm font-semibold text-white shadow transition hover:bg-emerald-700 sm:px-4"
           >
             <MdCall size={18} />
-            Audio Call
+            <span className="hidden sm:inline">Audio Call</span>
           </button>
           <button
             type="button"
             onClick={() => onStartCall(contact._id, contact.name, "video")}
-            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-blue-700 transition"
+            aria-label="Video call"
+            className="flex items-center gap-2 rounded-lg bg-blue-600 px-2.5 py-2 text-sm font-semibold text-white shadow transition hover:bg-blue-700 sm:px-4"
           >
             <MdVideocam size={18} />
-            Video Call
+            <span className="hidden sm:inline">Video Call</span>
           </button>
         </div>
       </div>

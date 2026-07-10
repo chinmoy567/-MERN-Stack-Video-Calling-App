@@ -12,7 +12,7 @@ import AuthService from "../../services/AuthService";
 import { resolveAvatar } from "../../utils/avatar";
 
 const StatCard = ({ icon, label, value, accent, loading }) => (
-  <div className="rounded-2xl border border-slate-200/60 bg-white/80 p-5 shadow-lg shadow-slate-200/40 backdrop-blur transition hover:-translate-y-0.5 hover:shadow-xl">
+  <div className="tilt-card rounded-2xl border border-slate-200/60 bg-white/80 p-5 shadow-lg shadow-slate-200/40 backdrop-blur [perspective:1000px]">
     <div className="flex items-center justify-between">
       <span
         className={`flex h-10 w-10 items-center justify-center rounded-xl text-white shadow-md ${accent}`}

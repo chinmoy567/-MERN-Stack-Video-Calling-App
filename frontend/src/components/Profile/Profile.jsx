@@ -107,8 +107,8 @@ const Profile = () => {
   const avatarSrc = preview || resolveAvatar(profile?.image);
 
   return (
-    <div className="mx-auto w-full max-w-lg">
-      <div className="rounded-2xl border border-slate-200/60 bg-white/80 p-8 shadow-xl shadow-slate-200/50 backdrop-blur">
+    <div className="mx-auto w-full max-w-lg [perspective:1200px]">
+      <div className="tilt-card rounded-2xl border border-slate-200/60 bg-white/80 p-6 sm:p-8 shadow-xl shadow-slate-200/50 backdrop-blur">
         <h1 className="mb-1 text-2xl font-bold text-slate-800">My Profile</h1>
         <p className="mb-6 text-sm text-slate-500">
           Update your photo and personal details.

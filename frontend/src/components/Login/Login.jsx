@@ -61,62 +61,73 @@ const Login = () => {
 
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-black px-4">
-      <div className="bg-gray-900 text-white shadow-lg rounded-2xl p-8 w-full max-w-sm animate-slideFade">
-        <h2 className="text-3xl font-bold text-center mb-6">Login</h2>
+    <div className="relative min-h-screen overflow-hidden flex items-center justify-center bg-slate-950 px-4 py-10">
+      <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+        <div className="animate-orb absolute -top-40 left-1/4 h-[28rem] w-[28rem] rounded-full bg-indigo-600/30 blur-[120px]" />
+        <div className="animate-orb animation-delay-300 absolute bottom-0 -right-32 h-[24rem] w-[24rem] rounded-full bg-fuchsia-600/20 blur-[120px]" />
+      </div>
 
-        <form className="space-y-4" onSubmit={handleSubmit}>
-          {/* Email */}
-          <div>
-            <label className="block mb-1 font-medium">Email</label>
-            <input
-              type="email"
-              placeholder="Enter your email"
-              className="w-full px-4 py-2 bg-gray-800 text-white border border-gray-700 
-              rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-            {errors.email && (
-              <p className="text-red-500 text-sm mt-1">{errors.email}</p>
-            )}
-          </div>
-
-          {/* Password */}
-          <div>
-            <label className="block mb-1 font-medium">Password</label>
-            <input
-              type="password"
-              placeholder="Enter your password"
-              className="w-full px-4 py-2 bg-gray-800 text-white border border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-            {errors.password && (
-              <p className="text-red-500 text-sm mt-1">{errors.password}</p>
-            )}
-          </div>
-
-          {/* Button */}
-          <button
-            type="submit"
-            className="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold 
-                       hover:bg-blue-700 transition"
-          >
+      <div className="relative z-10 w-full max-w-sm [perspective:1200px]">
+        <div className="glass-card tilt-card text-white p-6 sm:p-8 animate-slideFade">
+          <h2 className="text-2xl sm:text-3xl font-bold text-center mb-6">
             Login
-          </button>
-        </form>
+          </h2>
 
-        {/* Register Link */}
-        <p className="text-center mt-4 text-gray-300">
-          Don&apos;t have an account?{" "}
-          <Link to="/register" className="text-blue-500 hover:underline">
-            Register
-          </Link> |
-          <Link to="/forgot-password" className="text-blue-500 hover:underline">
-            {" "} Forgot Password?
-          </Link>
-        </p>
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            {/* Email */}
+            <div>
+              <label className="block mb-1 font-medium text-sm sm:text-base">Email</label>
+              <input
+                type="email"
+                placeholder="Enter your email"
+                className="w-full px-4 py-2.5 bg-white/5 text-white border border-white/10
+                rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+              {errors.email && (
+                <p className="text-red-400 text-sm mt-1">{errors.email}</p>
+              )}
+            </div>
+
+            {/* Password */}
+            <div>
+              <label className="block mb-1 font-medium text-sm sm:text-base">Password</label>
+              <input
+                type="password"
+                placeholder="Enter your password"
+                className="w-full px-4 py-2.5 bg-white/5 text-white border border-white/10 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              {errors.password && (
+                <p className="text-red-400 text-sm mt-1">{errors.password}</p>
+              )}
+            </div>
+
+            {/* Button */}
+            <button
+              type="submit"
+              className="w-full bg-gradient-to-r from-indigo-500 to-violet-600 text-white py-2.5 rounded-xl font-semibold
+                         shadow-lg shadow-indigo-900/50 transition hover:from-indigo-400 hover:to-violet-500"
+            >
+              Login
+            </button>
+          </form>
+
+          {/* Register Link */}
+          <p className="text-center mt-5 text-sm text-slate-300">
+            Don&apos;t have an account?{" "}
+            <Link to="/register" className="text-indigo-400 hover:underline">
+              Register
+            </Link>{" "}
+            |
+            <Link to="/forgot-password" className="text-indigo-400 hover:underline">
+              {" "}
+              Forgot Password?
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );

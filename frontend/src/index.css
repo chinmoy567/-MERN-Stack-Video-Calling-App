@@ -76,4 +76,24 @@
   .animation-delay-450 {
     animation-delay: 450ms;
   }
+
+  .glass-card {
+    @apply rounded-2xl border border-white/10 bg-white/5 shadow-2xl shadow-indigo-950/40 backdrop-blur-xl;
+  }
+
+  .tilt-card {
+    transform-style: preserve-3d;
+    transition: transform 0.4s ease, box-shadow 0.4s ease;
+  }
+
+  .tilt-card:hover {
+    transform: perspective(1000px) rotateX(2deg) rotateY(-2deg) translateY(-4px);
+    box-shadow: 0 25px 50px -12px rgba(79, 70, 229, 0.35);
+  }
+
+  @media (max-width: 640px) {
+    .tilt-card:hover {
+      transform: translateY(-2px);
+    }
+  }
 }
