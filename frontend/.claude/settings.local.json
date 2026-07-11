@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell -Command \"Get-Process -Id 17496,17760 | Select-Object Id,ProcessName,Path\")",
+      "Bash(powershell -Command \"Stop-Process -Id 17496,17760 -Force\")",
+      "Bash(netstat -ano)",
+      "PowerShell(Stop-Process *)",
+      "Bash(npm run *)",
+      "Bash(curl *)",
+      "Read(//c/Users/chinmoy/AppData/Local/Temp/claude/G--Programming-MERN-Stack-Video-Calling-App-frontend/169ad688-c98a-4cb3-b02c-05691b5b9a34/scratchpad/**)",
+      "Bash(python -c ' *)",
+      "Bash(printf '\\\\x89PNG\\\\r\\\\n\\\\x1a\\\\n')",
+      "Bash(powershell -Command \"Get-NetTCPConnection -LocalPort 4000 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess\")",
+      "Bash(npx vite *)",
+      "Bash(powershell -Command \"Start-Process 'chrome.exe' -ArgumentList '--incognito','http://localhost:5173/login'\")"
+    ]
+  }
+}
