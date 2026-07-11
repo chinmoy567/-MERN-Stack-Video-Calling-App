@@ -72,7 +72,9 @@
       "Bash(docker info *)",
       "Bash(break)",
       "Bash(curl -s -o /dev/null -w \"frontend status: %{http_code}\\\\n\" http://localhost:5173/)",
-      "Bash(curl -s -o /dev/null -w \"backend status: %{http_code}\\\\n\" http://localhost:4000/api/)"
+      "Bash(curl -s -o /dev/null -w \"backend status: %{http_code}\\\\n\" http://localhost:4000/api/)",
+      "Bash(docker tag *)",
+      "Bash(docker push *)"
     ]
   }
 }
