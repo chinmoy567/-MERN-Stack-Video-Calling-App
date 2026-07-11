@@ -65,7 +65,14 @@
       "Bash(curl -s -D - -o /dev/null --max-time 20 -X POST https://video-calling-and-messing-app.onrender.com/api/login -H 'Origin: https://mern-stack-video-calling-app-fromntend.onrender.com' -H 'Content-Type: application/json' -d '{\"email\":\"test@test.com\",\"password\":\"wrongpass\"}')",
       "Bash(time curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" --max-time 60 https://video-calling-and-messing-app.onrender.com/api/verify-email)",
       "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" --max-time 30 https://mern-stack-video-calling-app-fromntend.onrender.com/)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(docker --version)",
+      "Bash(docker compose *)",
+      "Bash(powershell -Command \"Start-Process 'C:\\\\Program Files\\\\Docker\\\\Docker\\\\Docker Desktop.exe'\" 2>&1)",
+      "Bash(docker info *)",
+      "Bash(break)",
+      "Bash(curl -s -o /dev/null -w \"frontend status: %{http_code}\\\\n\" http://localhost:5173/)",
+      "Bash(curl -s -o /dev/null -w \"backend status: %{http_code}\\\\n\" http://localhost:4000/api/)"
     ]
   }
 }
